@@ -1,0 +1,2 @@
+"""Shared FPVBattle core package."""
+
