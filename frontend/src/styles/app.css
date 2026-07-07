@@ -499,6 +499,27 @@ h3 {
   font-size: 0.8rem;
 }
 
+.recharts-default-tooltip {
+  border: 1px solid rgba(12, 17, 24, 0.18) !important;
+  border-radius: 10px;
+  background: rgba(244, 239, 230, 0.96) !important;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18) !important;
+}
+
+.recharts-default-tooltip,
+.recharts-default-tooltip .recharts-tooltip-label,
+.recharts-default-tooltip .recharts-tooltip-item,
+.recharts-default-tooltip .recharts-tooltip-item-name,
+.recharts-default-tooltip .recharts-tooltip-item-value {
+  color: #14181f !important;
+  text-shadow: none !important;
+}
+
+.recharts-default-tooltip .recharts-tooltip-label {
+  margin-bottom: 6px !important;
+  font-weight: 600;
+}
+
 @media (max-width: 1080px) {
   .filters-grid,
   .stat-grid {
