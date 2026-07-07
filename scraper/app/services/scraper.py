@@ -44,7 +44,9 @@ class BattleScraperService:
             len(payload.season_leaderboard),
             payload.track,
         )
-        self._persistence.persist_day(payload)
+        persisted = self._persistence.persist_day(payload)
+        if not persisted:
+            self._logger.warning("Skipped %s %s because no daily results were available.", race_class, target_date.isoformat())
 
     def sync_current_window(self) -> None:
         now = datetime.now(timezone.utc)

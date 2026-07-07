@@ -1,0 +1,100 @@
+# Additional UI and Analytics Requirements
+
+## Header
+
+Add the following controls to the application header:
+
+- Date selector for both **Open Daily** and **Whoop Daily** pages.
+- If the selected date is not today, display a **Back to Today** button that immediately returns to today's results.
+- The **Pilot Viewpoint** selector must be a searchable dropdown that filters pilots as the user types.
+
+---
+
+## Date Range Filters
+
+Next to the **From** and **To** date selectors, add quick date range filters:
+
+- Last Week
+- Last Month
+- Last Quarter
+- Last Year
+
+These ranges should always be calculated relative to the current date.
+
+---
+
+## Tables
+
+- Ensure all table columns are properly aligned so that values in the same column share the same vertical axis.
+- Every table in **General Stats** must support ascending and descending sorting by clicking any column header, similar to the Country Statistics table.
+
+---
+
+## Interactive Charts
+
+All charts throughout the application should be fully interactive.
+
+Support the following interactions:
+
+- Zoom in
+- Zoom out
+- Click-and-drag to select and inspect a specific date range
+- Pan the selected range
+- Reset zoom
+
+---
+
+## Leader Gap Chart
+
+The Leader Gap chart should display:
+
+- A line showing the selected pilot's **percentage gap** to the average of the top three finishers.
+- An optional **weekly average** gap line that can be toggled on or off.
+- An optional **monthly average** gap line that can be toggled on or off.
+
+The chart timeline must always begin with the first recorded result of the selected pilot rather than the beginning of the selected date range.
+
+---
+
+## Daily Leaderboard Hover Statistics
+
+On both the **Open Daily** and **Whoop Daily** pages, hovering over another pilot should display a tooltip panel next to the mouse cursor containing that pilot's statistics for the current season (within the currently selected class only).
+
+The tooltip should include:
+
+- A small participation chart showing which race days were skipped.
+- A chart showing the pilot's finishing positions throughout the season.
+- Basic season summary statistics.
+
+Statistics must always be calculated separately for the Open and Whoop classes.
+
+---
+
+## Logarithmic Performance Chart
+
+Update the logarithmic performance chart to include:
+
+- Proper units in the legend:
+  - Gap to leader (seconds)
+  - Normalized score (%)
+- A short explanation below the chart describing how the normalized score is calculated and how it should be interpreted.
+
+---
+
+## Season Statistics
+
+- Sort the Season Statistics table by default from the newest season to the oldest.
+- Display the units for the **Largest Victory Margin** (seconds).
+- Add an explanation below the table describing what qualifies as a **consistent pilot**.
+
+---
+
+## Consistency Analytics
+
+Below every chart and table in the **Consistency Rankings** section, add a short explanation describing:
+
+- How the metric is calculated.
+- How the consistency score is computed.
+- How the improvement ranking is determined.
+
+These explanations should help users understand the methodology behind every displayed statistic.

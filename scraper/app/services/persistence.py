@@ -16,11 +16,15 @@ class ScrapePersistenceService:
         self.unit_of_work = unit_of_work
         self._logger = logging.getLogger(__name__)
 
-    def persist_day(self, payload: ParsedDayPayload) -> None:
+    def persist_day(self, payload: ParsedDayPayload) -> bool:
         if not payload.results:
-            raise ValueError(
-                f"No daily results parsed for {payload.race_class} {payload.date.isoformat()}; refusing to persist partial day_spec only.",
+            self._logger.warning(
+                "No daily results parsed for %s %s from %s; skipping persistence for this day.",
+                payload.race_class,
+                payload.date.isoformat(),
+                payload.source,
             )
+            return False
         with self.unit_of_work as uow:
             day_spec = uow.day_specs.upsert(
                 target_date=payload.date,
@@ -63,6 +67,7 @@ class ScrapePersistenceService:
                 len(payload.results),
                 len(payload.season_leaderboard),
             )
+        return True
 
     def has_day(self, *, target_date: date, race_class: str) -> bool:
         with self.unit_of_work as uow:

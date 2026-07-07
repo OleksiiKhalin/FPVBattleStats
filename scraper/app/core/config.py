@@ -13,11 +13,11 @@ class ScraperSettings(BaseSettings):
     )
     open_base_url: str = "https://ua-velocidrone.fun"
     whoop_base_url: str = "https://ua-velocidrone.fun/whoop"
-    api_base_url: str = "https://ua-velocidrone.fun"
+    api_base_url: str = "https://velocidrone-bot.gorbach.dev"
     historical_start_date: date = date(2023, 11, 15)
     request_timeout_seconds: float = 30.0
-    request_delay_seconds: float = 2.0
-    request_jitter_seconds: float = 0.5
+    request_delay_seconds: float = 1.0
+    request_jitter_seconds: float = 0.2
     request_max_retries: int = 3
     request_backoff_seconds: float = 2.0
     dump_failed_pages: bool = True

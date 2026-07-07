@@ -1,6 +1,6 @@
-import type { PilotAnalyticsResponse } from "../api/types";
+import type { PilotStatsResponse } from "../api/types";
 
-export function StreakBoard({ streaks }: { streaks: PilotAnalyticsResponse["streaks"] }) {
+export function StreakBoard({ streaks }: { streaks: PilotStatsResponse["streaks"] }) {
   return (
     <section className="panel">
       <div className="panel-header">
@@ -9,12 +9,14 @@ export function StreakBoard({ streaks }: { streaks: PilotAnalyticsResponse["stre
           <h2>Streak history</h2>
         </div>
         <div className="meta">
+          <span>Threshold: {streaks.threshold}+ days</span>
           <span>Singles: {streaks.lonely_single_days}</span>
           <span>Two-day runs: {streaks.lonely_two_day_runs}</span>
         </div>
       </div>
 
       <div className="streak-groups">
+        {streaks.streaks.length === 0 ? <p>No streaks hit the selected threshold.</p> : null}
         {streaks.streaks.map((streak) => (
           <article key={`${streak.start_date}-${streak.end_date}`} className="streak-group">
             <h3>

@@ -5,14 +5,13 @@ import { useApi } from "../hooks/useApi";
 
 type Props = {
   raceClass: string;
+  selectedDate: string;
 };
 
-const TODAY = new Date().toISOString().slice(0, 10);
-
-export function DailyScoreboardPage({ raceClass }: Props) {
+export function DailyScoreboardPage({ raceClass, selectedDate }: Props) {
   const { data, error, loading } = useApi<ScoreboardResponse>(
-    () => fetchJson(`/scoreboards/${raceClass}/${TODAY}`),
-    [raceClass],
+    () => fetchJson(`/scoreboards/${raceClass}/${selectedDate}`),
+    [raceClass, selectedDate],
   );
 
   if (loading) {
@@ -21,5 +20,21 @@ export function DailyScoreboardPage({ raceClass }: Props) {
   if (error || !data) {
     return <div className="panel">Scoreboard unavailable: {error ?? "No data"}</div>;
   }
-  return <ScoreboardTable data={data} />;
+  return (
+    <div className="stack">
+      <section className="panel hero-panel">
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">{raceClass} daily</p>
+            <h2>Database-backed leaderboard</h2>
+          </div>
+          <div className="meta">
+            <span>Source: local FPVBattle database</span>
+            <span>Date: {selectedDate}</span>
+          </div>
+        </div>
+      </section>
+      <ScoreboardTable data={data} selectedDate={selectedDate} />
+    </div>
+  );
 }
