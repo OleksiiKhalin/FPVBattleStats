@@ -13,9 +13,9 @@ This repository deploys cleanly to Railway as four services:
 - Create one Railway project.
 - Add a PostgreSQL service inside that project.
 
-## Python Packaging
+## Python Import Path
 
-`requirements.txt` now installs the shared package from `shared/python`, so both the backend and scraper can import `fpvbattle_core` without setting `PYTHONPATH`.
+Railway should set `PYTHONPATH=shared/python` for both Python services so the backend and scraper can import `fpvbattle_core`.
 
 ## Backend Service
 
@@ -37,6 +37,7 @@ bash railway/backend-start.sh
 ```text
 FPVBATTLE_DATABASE_URL=${{Postgres.DATABASE_URL}}
 FPVBATTLE_CORS_ORIGINS=["https://your-frontend-domain"]
+PYTHONPATH=shared/python
 ```
 
 ## Scraper Service
@@ -58,6 +59,7 @@ bash railway/scraper-sync-current.sh
 
 ```text
 FPVBATTLE_DATABASE_URL=${{Postgres.DATABASE_URL}}
+PYTHONPATH=shared/python
 ```
 
 - Cron schedule:
