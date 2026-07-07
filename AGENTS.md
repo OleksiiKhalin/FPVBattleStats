@@ -7,8 +7,8 @@ FPVBattle Stats is a showcase analytics platform for FPVBattle race history. It 
 The monorepo contains three independent applications:
 
 - `scraper`: fetches open and whoop class results, backfills history, and syncs the active UTC race day
-- `backend`: FastAPI service that exposes scoreboards and analytics
-- `frontend`: React + Vite client for daily views and pilot analytics
+- `backend`: FastAPI service that exposes scoreboards and analytics.
+- `frontend`: React + Vite client for daily views and pilot analytics.
 
 ## Architecture
 
