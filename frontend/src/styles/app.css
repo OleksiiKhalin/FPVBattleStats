@@ -685,3 +685,36 @@ h3 {
     font-size: 0.74rem;
   }
 }
+
+.scope-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.scope-filter select {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text);
+  background: var(--panel-soft);
+}
+
+.comparison-picker {
+  max-width: 420px;
+  position: relative;
+  z-index: 30;
+}
+
+.recent-pilots {
+  align-items: center;
+}
+
+.recent-pilots > span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}

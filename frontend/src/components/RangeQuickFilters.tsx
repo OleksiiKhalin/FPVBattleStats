@@ -1,6 +1,9 @@
 type Props = {
   onApply: (from: string, to: string) => void;
   onClear: () => void;
+  seasons?: string[];
+  season?: string;
+  onSeasonChange?: (season: string) => void;
 };
 
 function formatDate(value: Date) {
@@ -14,7 +17,7 @@ function shiftDays(days: number) {
   return { from: formatDate(start), to: formatDate(end) };
 }
 
-export function RangeQuickFilters({ onApply, onClear }: Props) {
+export function RangeQuickFilters({ onApply, onClear, seasons = [], season = "", onSeasonChange }: Props) {
   const options = [
     { label: "Last week", days: 7 },
     { label: "Last month", days: 30 },
@@ -37,9 +40,16 @@ export function RangeQuickFilters({ onApply, onClear }: Props) {
           {option.label}
         </button>
       ))}
-      <button type="button" className="chip" onClick={onClear}>
-        Clear dates
-      </button>
+      <button type="button" className="chip" onClick={onClear}>Clear dates</button>
+      {onSeasonChange ? (
+        <label className="scope-filter">
+          <span>Statistics scope</span>
+          <select value={season} onChange={(event) => onSeasonChange(event.target.value)}>
+            <option value="">All dates</option>
+            {seasons.map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
+        </label>
+      ) : null}
     </div>
   );
 }

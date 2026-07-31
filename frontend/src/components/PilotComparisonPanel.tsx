@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { fetchJson } from "../api/client";
 import type { PilotComparisonDay, PilotComparisonResponse, PilotOption } from "../api/types";
@@ -11,16 +11,22 @@ type Props = {
   dateTo: string;
 };
 
-function buildComparisonPath(raceClass: string, primaryPilot: string, opponentPilot: string, dateFrom: string, dateTo: string, season: string) {
+const RECENT_PILOTS_KEY = "fpvbattle-recent-comparison-pilots";
+
+function buildComparisonPath(raceClass: string, primaryPilot: string, opponentPilot: string, dateFrom: string, dateTo: string) {
   const params = new URLSearchParams();
   if (dateFrom) params.set("date_from", dateFrom);
   if (dateTo) params.set("date_to", dateTo);
-  if (season) params.set("season", season);
   return `/analytics/pilot-compare/${raceClass}/${encodeURIComponent(primaryPilot)}/${encodeURIComponent(opponentPilot)}?${params.toString()}`;
 }
 
 function formatNumber(value: number | null, suffix = "") {
   return value === null ? "-" : `${value}${suffix}`;
+}
+
+function formatGapDifference(primaryGap: number | null, opponentGap: number | null) {
+  if (primaryGap === null || opponentGap === null || opponentGap === 0) return "-";
+  return `${Number((((primaryGap - opponentGap) / opponentGap) * 100).toFixed(1))}%`;
 }
 
 function monthLabel(value: string) {
@@ -48,23 +54,65 @@ function PilotSummary({ name, stats }: { name: string; stats: PilotComparisonRes
           <span key={league}>{league}: <strong>{formatNumber(averagePlace)}</strong></span>
         ))}
       </div>
+      <p className="chart-note">These category values are average finishing places.</p>
     </section>
   );
 }
 
+function readRecentPilots() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(RECENT_PILOTS_KEY) ?? "[]");
+    return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
 export function PilotComparisonPanel({ primaryPilot, raceClass, dateFrom, dateTo }: Props) {
   const [opponentPilot, setOpponentPilot] = useState("");
-  const [season, setSeason] = useState("");
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const [recentPilots, setRecentPilots] = useState<string[]>(readRecentPilots);
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const pilots = useApi<PilotOption[]>(() => fetchJson(`/analytics/pilots?race_class=${raceClass}`), [raceClass]);
 
   useEffect(() => {
-    const nextOpponent = pilots.data?.find((pilot) => pilot.pilot !== primaryPilot)?.pilot ?? "";
-    setOpponentPilot(nextOpponent);
+    const handleClickOutside = (event: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
+    };
+    window.addEventListener("mousedown", handleClickOutside);
+    return () => window.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    const firstPilot = pilots.data?.find((pilot) => pilot.pilot !== primaryPilot)?.pilot ?? "";
+    setOpponentPilot((current) => current && current !== primaryPilot && pilots.data?.some((pilot) => pilot.pilot === current) ? current : firstPilot);
   }, [pilots.data, primaryPilot, raceClass]);
 
+  useEffect(() => {
+    setQuery(opponentPilot);
+  }, [opponentPilot]);
+
+  const options = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    return (pilots.data ?? [])
+      .filter((pilot) => pilot.pilot !== primaryPilot)
+      .filter((pilot) => !normalized || pilot.pilot.toLowerCase().includes(normalized) || (pilot.country ?? "").toLowerCase().includes(normalized))
+      .slice(0, 24);
+  }, [pilots.data, primaryPilot, query]);
+
+  const selectOpponent = (pilot: string) => {
+    setOpponentPilot(pilot);
+    setQuery(pilot);
+    setOpen(false);
+    const nextRecent = [pilot, ...recentPilots.filter((value) => value !== pilot && value !== primaryPilot)].slice(0, 5);
+    setRecentPilots(nextRecent);
+    localStorage.setItem(RECENT_PILOTS_KEY, JSON.stringify(nextRecent));
+  };
+
   const comparison = useApi<PilotComparisonResponse>(
-    () => fetchJson(buildComparisonPath(raceClass, primaryPilot, opponentPilot, dateFrom, dateTo, season)),
-    [raceClass, primaryPilot, opponentPilot, dateFrom, dateTo, season],
+    () => fetchJson(buildComparisonPath(raceClass, primaryPilot, opponentPilot, dateFrom, dateTo)),
+    [raceClass, primaryPilot, opponentPilot, dateFrom, dateTo],
   );
 
   const months = useMemo(() => {
@@ -73,73 +121,31 @@ export function PilotComparisonPanel({ primaryPilot, raceClass, dateFrom, dateTo
       const month = day.date.slice(0, 7);
       grouped.set(month, [...(grouped.get(month) ?? []), day]);
     }
-    return [...grouped.entries()];
+    return [...grouped.entries()].sort(([left], [right]) => right.localeCompare(left));
   }, [comparison.data]);
 
   return (
     <div className="stack">
       <section className="panel">
-        <div className="panel-header">
-          <div>
-            <p className="eyebrow">Head-to-head</p>
-            <h2>Compare {primaryPilot} against another pilot</h2>
-          </div>
-          <div className="meta"><span>Overall uses the selected class and date range. A season narrows that same range.</span></div>
-        </div>
-        <div className="filters-grid comparison-filters">
-          <label className="field">
-            <span>Compare with</span>
-            <select value={opponentPilot} onChange={(event) => setOpponentPilot(event.target.value)}>
-              {pilots.data?.filter((pilot) => pilot.pilot !== primaryPilot).map((pilot) => <option key={pilot.pilot} value={pilot.pilot}>{pilot.pilot}</option>)}
-            </select>
-          </label>
-          <label className="field">
-            <span>Statistics scope</span>
-            <select value={season} onChange={(event) => setSeason(event.target.value)}>
-              <option value="">Overall</option>
-              {comparison.data?.seasons.map((value) => <option key={value} value={value}>{value}</option>)}
-            </select>
+        <div className="panel-header"><div><p className="eyebrow">Head-to-head</p><h2>Compare {primaryPilot} against another pilot</h2></div><div className="meta"><span>Statistics use the selected class and date scope.</span></div></div>
+        <div className="comparison-picker" ref={rootRef}>
+          <label className="field"><span>Compare with</span>
+            <div className="combo-box">
+              <input value={query} onFocus={() => setOpen(true)} onChange={(event) => { setQuery(event.target.value); setOpen(true); }} onKeyDown={(event) => { if (event.key === "Enter" && options[0]) { event.preventDefault(); selectOpponent(options[0].pilot); } }} placeholder="Search pilot name" autoComplete="off" />
+              <button type="button" className="combo-toggle" onClick={() => setOpen((value) => !value)}>v</button>
+              {open ? <div className="combo-menu">{options.length === 0 ? <div className="combo-empty">No pilots found</div> : options.map((pilot) => <button key={pilot.pilot} type="button" className={pilot.pilot === opponentPilot ? "combo-option active" : "combo-option"} onClick={() => selectOpponent(pilot.pilot)}><span>{pilot.pilot}</span><small>{pilot.country ?? "Unknown"}</small></button>)}</div> : null}
+            </div>
           </label>
         </div>
+        {recentPilots.filter((pilot) => pilot !== primaryPilot).length ? <div className="quick-filters recent-pilots"><span>Recent pilots</span>{recentPilots.filter((pilot) => pilot !== primaryPilot).map((pilot) => <button className={pilot === opponentPilot ? "chip active" : "chip"} type="button" key={pilot} onClick={() => selectOpponent(pilot)}>{pilot}</button>)}</div> : null}
       </section>
 
       {comparison.loading ? <div className="panel">Loading comparison...</div> : null}
       {comparison.error ? <div className="panel">Comparison unavailable: {comparison.error}</div> : null}
       {comparison.data ? <>
-        <section className="panel">
-          <div className="panel-header"><div><p className="eyebrow">Shared race days</p><h2>Matchup KPIs</h2></div></div>
-          <div className="stat-grid comparison-kpis">
-            <div className="stat-card"><span>{primaryPilot} win rate</span><strong>{formatNumber(comparison.data.win_rate, "%")}</strong></div>
-            <div className="stat-card"><span>Wins / shared days</span><strong>{comparison.data.primary_wins} / {comparison.data.shared_days}</strong></div>
-            <div className="stat-card"><span>Gap-to-leader difference</span><strong>{formatNumber(comparison.data.primary.average_gap_to_leader === null || comparison.data.opponent.average_gap_to_leader === null ? null : Number((comparison.data.primary.average_gap_to_leader - comparison.data.opponent.average_gap_to_leader).toFixed(3)), " s")}</strong></div>
-          </div>
-        </section>
-
-        <section className="panel comparison-pilots">
-          <PilotSummary name={primaryPilot} stats={comparison.data.primary} />
-          <PilotSummary name={opponentPilot} stats={comparison.data.opponent} />
-        </section>
-
-        <section className="panel">
-          <div className="panel-header"><div><p className="eyebrow">Daily results</p><h2>Monthly head-to-head calendar</h2></div></div>
-          <div className="comparison-calendar-list">
-            {months.map(([month, days]) => {
-              const leadingBlanks = new Date(`${month}-01T00:00:00`).getDay();
-              return <section className="comparison-month" key={month}>
-                <h3>{monthLabel(month)}</h3>
-                <div className="comparison-weekdays">{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((label) => <span key={label}>{label}</span>)}</div>
-                <div className="comparison-calendar">
-                  {Array.from({ length: leadingBlanks }, (_, index) => <span className="comparison-day blank" key={`blank-${index}`} />)}
-                  {days.map((day) => <div className={day.difference_seconds === null ? "comparison-day missing" : "comparison-day"} style={comparisonTileStyle(day)} key={day.date} title={`${day.date}: ${day.difference_seconds === null ? "one or both pilots did not fly" : `${day.difference_seconds > 0 ? "+" : ""}${day.difference_seconds} seconds for ${primaryPilot}`}`}>
-                    <small>{day.date.slice(8)}</small>
-                    <strong>{day.difference_seconds === null ? "-" : `${day.difference_seconds > 0 ? "+" : ""}${day.difference_seconds}s`}</strong>
-                  </div>)}
-                </div>
-              </section>;
-            })}
-          </div>
-          <p className="chart-note">Each square shows the seconds difference: positive green means {primaryPilot} was faster, while negative red means they were slower. Stronger colour means a larger percentage difference. Black squares show days when at least one pilot did not fly.</p>
-        </section>
+        <section className="panel"><div className="panel-header"><div><p className="eyebrow">Shared race days</p><h2>Matchup KPIs</h2></div></div><div className="stat-grid comparison-kpis"><div className="stat-card"><span>{primaryPilot} win rate</span><strong>{formatNumber(comparison.data.win_rate, "%")}</strong></div><div className="stat-card"><span>Wins / shared days</span><strong>{comparison.data.primary_wins} / {comparison.data.shared_days}</strong></div><div className="stat-card"><span>Gap-to-leader difference</span><strong>{formatGapDifference(comparison.data.primary.average_gap_to_leader, comparison.data.opponent.average_gap_to_leader)}</strong></div></div></section>
+        <section className="panel comparison-pilots"><PilotSummary name={primaryPilot} stats={comparison.data.primary} /><PilotSummary name={opponentPilot} stats={comparison.data.opponent} /></section>
+        <section className="panel"><div className="panel-header"><div><p className="eyebrow">Daily results</p><h2>Monthly head-to-head calendar</h2></div></div><div className="comparison-calendar-list">{months.map(([month, days]) => { const leadingBlanks = new Date(`${month}-01T00:00:00`).getDay(); return <section className="comparison-month" key={month}><h3>{monthLabel(month)}</h3><div className="comparison-weekdays">{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((label) => <span key={label}>{label}</span>)}</div><div className="comparison-calendar">{Array.from({ length: leadingBlanks }, (_, index) => <span className="comparison-day blank" key={`blank-${index}`} />)}{days.map((day) => <div className={day.difference_seconds === null ? "comparison-day missing" : "comparison-day"} style={comparisonTileStyle(day)} key={day.date} title={day.date}><small>{day.date.slice(8)}</small><strong>{day.difference_seconds === null ? "-" : `${day.difference_seconds > 0 ? "+" : ""}${day.difference_seconds}s`}</strong></div>)}</div></section>; })}</div><p className="chart-note">Each square shows the seconds difference: positive green means {primaryPilot} was faster, while negative red means they were slower. Stronger colour means a larger percentage difference. Black squares show days when at least one pilot did not fly.</p></section>
       </> : null}
     </div>
   );

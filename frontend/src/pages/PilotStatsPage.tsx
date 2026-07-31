@@ -3,7 +3,7 @@ import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { fetchJson } from "../api/client";
-import type { PilotStatsResponse, PilotTimelinePoint } from "../api/types";
+import type { GeneralStatsResponse, PilotStatsResponse, PilotTimelinePoint } from "../api/types";
 import { PilotComparisonPanel } from "../components/PilotComparisonPanel";
 import { RangeQuickFilters } from "../components/RangeQuickFilters";
 import { StreakBoard } from "../components/StreakBoard";
@@ -61,8 +61,8 @@ export function PilotStatsPage() {
   const [showLeaderAverage, setShowLeaderAverage] = useState(true);
   const [showFieldAverage, setShowFieldAverage] = useState(true);
   const [showEverydayGap, setShowEverydayGap] = useState(true);
-  const [excludeWorstWeekly, setExcludeWorstWeekly] = useState(false);
-  const [excludeWorstMonthly, setExcludeWorstMonthly] = useState(false);
+  const [excludeWorstDay, setExcludeWorstDay] = useState(false);
+  const [seasonScope, setSeasonScope] = useState("");
   const [showPilotTime, setShowPilotTime] = useState(true);
   const [showWeeklyAverage, setShowWeeklyAverage] = useState(false);
   const [showMonthlyAverage, setShowMonthlyAverage] = useState(false);
@@ -73,6 +73,8 @@ export function PilotStatsPage() {
       setSelectedPilot(pilotFromQuery);
     }
   }, [searchParams, setSelectedPilot]);
+
+  const seasonStats = useApi<GeneralStatsResponse>(() => fetchJson(`/analytics/general-stats/${raceClass}`), [raceClass]);
 
   const stats = useApi<PilotStatsResponse>(
     () => fetchJson(buildPilotStatsPath(raceClass, selectedPilot, dateFrom, dateTo, streakThreshold)),
@@ -102,15 +104,15 @@ export function PilotStatsPage() {
       }
       return Number((((point.pilot_time - point.leader_average_time) / point.leader_average_time) * 100).toFixed(3));
     });
-    const weekly = rollingAverage(gapPercentValues, 7, excludeWorstWeekly);
-    const monthly = rollingAverage(gapPercentValues, 30, excludeWorstMonthly);
+    const weekly = rollingAverage(gapPercentValues, 7, excludeWorstDay);
+    const monthly = rollingAverage(gapPercentValues, 30, excludeWorstDay);
     return timeline.map((point, index) => ({
       date: point.date,
       gap_percent_to_top3: gapPercentValues[index],
       weekly_average_gap_percent: weekly[index],
       monthly_average_gap_percent: monthly[index],
     }));
-  }, [excludeWorstMonthly, excludeWorstWeekly, stats.data]);
+  }, [excludeWorstDay, stats.data]);
 
   return (
     <div className="stack">
@@ -149,8 +151,17 @@ export function PilotStatsPage() {
         </div>
 
         <RangeQuickFilters
-          onApply={(from, to) => { setDateFrom(from); setDateTo(to); }}
-          onClear={() => { setDateFrom(""); setDateTo(""); }}
+          onApply={(from, to) => { setDateFrom(from); setDateTo(to); setSeasonScope(""); }}
+          onClear={() => { setDateFrom(""); setDateTo(""); setSeasonScope(""); }}
+          seasons={seasonStats.data?.seasons.map((row) => row.season) ?? []}
+          season={seasonScope}
+          onSeasonChange={(value) => {
+            setSeasonScope(value);
+            if (!value) { setDateFrom(""); setDateTo(""); return; }
+            const [year, month] = value.split("-").map(Number);
+            setDateFrom(`${value}-01`);
+            setDateTo(new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10));
+          }}
         />
 
         <div className="section-tabs">
@@ -180,9 +191,8 @@ export function PilotStatsPage() {
             <div className="toggle-row">
               <label><input type="checkbox" checked={showEverydayGap} onChange={() => setShowEverydayGap((value) => !value)} /> Daily gap (%)</label>
               <label><input type="checkbox" checked={showWeeklyAverage} onChange={() => setShowWeeklyAverage((value) => !value)} /> Weekly average (%)</label>
-              <label><input type="checkbox" checked={excludeWorstWeekly} onChange={() => setExcludeWorstWeekly((value) => !value)} /> Exclude worst day (weekly)</label>
+              <label><input type="checkbox" checked={excludeWorstDay} onChange={() => setExcludeWorstDay((value) => !value)} /> Exclude worst day</label>
               <label><input type="checkbox" checked={showMonthlyAverage} onChange={() => setShowMonthlyAverage((value) => !value)} /> Monthly average (%)</label>
-              <label><input type="checkbox" checked={excludeWorstMonthly} onChange={() => setExcludeWorstMonthly((value) => !value)} /> Exclude worst day (monthly)</label>
             </div>
           </div>
           <div className="chart-actions">
