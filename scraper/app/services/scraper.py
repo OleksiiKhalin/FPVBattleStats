@@ -110,7 +110,7 @@ class BattleScraperService:
 
     def _build_dashboard_api_url(self, *, target_date: date, race_class: str) -> str:
         cup_id = "whoop-class" if race_class == "whoop" else "open-class"
-        return f"{settings.api_base_url}/api/dashboard?cupId={cup_id}&date={target_date.isoformat()}"
+        return f"{settings.api_base_url}/api/competitions/overview?cupId={cup_id}&date={target_date.isoformat()}"
 
     def _dump_failed_page(self, *, page_url: str, target_date: date, race_class: str, content: str) -> None:
         failed_dir = Path(__file__).resolve().parents[3] / "data" / "failed-pages"
