@@ -27,7 +27,8 @@ function groupRows(rows: ScoreboardEntry[]) {
     }
     groups.get(key)!.push(row);
   }
-  return [...groups.entries()];
+  const order = ["gold", "silver", "bronze", "unranked"];
+  return [...groups.entries()].sort(([left], [right]) => order.indexOf(left.toLowerCase()) - order.indexOf(right.toLowerCase()));
 }
 
 function formatTime(value: number | null) {

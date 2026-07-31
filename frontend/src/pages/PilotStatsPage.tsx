@@ -53,10 +53,10 @@ function rollingAverage(values: Array<number | null>, windowSize: number, exclud
 export function PilotStatsPage() {
   const { selectedPilot, setSelectedPilot } = usePilot();
   const [searchParams] = useSearchParams();
-  const [raceClass, setRaceClass] = useState(searchParams.get("class") ?? "open");
-  const [dateFrom, setDateFrom] = useState(searchParams.get("from") ?? DEFAULT_FROM);
-  const [dateTo, setDateTo] = useState(searchParams.get("to") ?? DEFAULT_TO);
-  const [section, setSection] = useState<PilotSection>("leader-gap");
+  const [raceClass, setRaceClass] = useState(searchParams.get("class") ?? sessionStorage.getItem("fpvbattle-pilot-class") ?? "open");
+  const [dateFrom, setDateFrom] = useState(searchParams.get("from") ?? sessionStorage.getItem("fpvbattle-pilot-from") ?? DEFAULT_FROM);
+  const [dateTo, setDateTo] = useState(searchParams.get("to") ?? sessionStorage.getItem("fpvbattle-pilot-to") ?? DEFAULT_TO);
+  const [section, setSection] = useState<PilotSection>((sessionStorage.getItem("fpvbattle-pilot-section") as PilotSection | null) ?? "leader-gap");
   const [streakThreshold, setStreakThreshold] = useState(3);
   const [showLeaderAverage, setShowLeaderAverage] = useState(true);
   const [showFieldAverage, setShowFieldAverage] = useState(true);
@@ -73,6 +73,13 @@ export function PilotStatsPage() {
       setSelectedPilot(pilotFromQuery);
     }
   }, [searchParams, setSelectedPilot]);
+
+  useEffect(() => {
+    sessionStorage.setItem("fpvbattle-pilot-class", raceClass);
+    sessionStorage.setItem("fpvbattle-pilot-from", dateFrom);
+    sessionStorage.setItem("fpvbattle-pilot-to", dateTo);
+    sessionStorage.setItem("fpvbattle-pilot-section", section);
+  }, [dateFrom, dateTo, raceClass, section]);
 
   const seasonStats = useApi<GeneralStatsResponse>(() => fetchJson(`/analytics/general-stats/${raceClass}`), [raceClass]);
 

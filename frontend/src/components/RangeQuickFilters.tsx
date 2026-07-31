@@ -25,6 +25,8 @@ export function RangeQuickFilters({ onApply, onClear, seasons = [], season = "",
     { label: "Last year", days: 365 },
   ];
 
+  const orderedSeasons = [...seasons].sort((left, right) => right.localeCompare(left));
+
   return (
     <div className="quick-filters">
       {options.map((option) => (
@@ -40,14 +42,14 @@ export function RangeQuickFilters({ onApply, onClear, seasons = [], season = "",
           {option.label}
         </button>
       ))}
-      {seasons[0] ? <button type="button" className="chip" onClick={() => onSeasonChange?.(seasons[0])}>Current season</button> : null}
+      {orderedSeasons[0] ? <button type="button" className="chip" onClick={() => onSeasonChange?.(orderedSeasons[0])}>Current season</button> : null}
       <button type="button" className="chip" onClick={onClear}>Clear dates</button>
       {onSeasonChange ? (
         <label className="scope-filter">
           <span>Statistics scope</span>
           <select value={season} onChange={(event) => onSeasonChange(event.target.value)}>
             <option value="">All dates</option>
-            {[...seasons].sort((left, right) => right.localeCompare(left)).map((value) => <option key={value} value={value}>{value}</option>)}
+            {orderedSeasons.map((value) => <option key={value} value={value}>{value}</option>)}
           </select>
         </label>
       ) : null}

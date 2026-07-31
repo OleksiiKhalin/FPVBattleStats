@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NavLink, Route, Routes, useLocation } from "react-router-dom";
+import { NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 import { PilotSelector } from "./components/PilotSelector";
 import { DailyScoreboardPage } from "./pages/DailyScoreboardPage";
@@ -10,6 +10,8 @@ const TODAY = new Date().toISOString().slice(0, 10);
 
 export function App() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const compareReturn = (location.state as { compareReturn?: string } | null)?.compareReturn;
   const [selectedDailyDate, setSelectedDailyDate] = useState(TODAY);
   useEffect(() => {
     const date = new URLSearchParams(location.search).get("date");
@@ -27,6 +29,7 @@ export function App() {
           <h1>FPVBattle Stats</h1>
         </div>
         <div className="topbar-controls">
+          {isDailyPage && compareReturn ? <button type="button" className="chip" onClick={() => navigate(compareReturn)}>Back to comparison</button> : null}
           {isDailyPage ? (
             <label className="date-selector">
               <span>Daily date</span>
