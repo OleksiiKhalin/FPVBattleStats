@@ -779,3 +779,24 @@ h3 {
   display: grid;
   gap: 2px;
 }
+
+.calendar-total-times {
+  margin-top: 5px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.easy-day {
+  background: rgba(190, 79, 79, 0.26);
+}
+
+.easy-day.favorable {
+  background: rgba(46, 157, 108, 0.34);
+}
+
+.easy-day em {
+  color: inherit;
+  font-size: 0.7rem;
+  font-style: normal;
+  opacity: 0.8;
+}

@@ -114,6 +114,13 @@ export type ParticipationDayRow = {
   participants: number;
 };
 
+export type EasyDayRow = {
+  date: string;
+  average_gap_to_leader: number | null;
+  participant_count: number;
+  is_favorable: boolean | null;
+};
+
 export type ConsistencyRow = {
   pilot: string;
   country: string | null;
@@ -141,6 +148,15 @@ export type GeneralStatsResponse = {
     peak_participation_day: ParticipationDayRow | null;
     lowest_participation_day: ParticipationDayRow | null;
     participation_trend: number | null;
+  };
+  easy_days: {
+    consistent_pilots_only: boolean;
+    regular_pilot_threshold: number;
+    eligible_pilot_count: number;
+    period_average_gap_to_leader: number | null;
+    selected_day: EasyDayRow | null;
+    favorable_days: number;
+    daily_gaps: EasyDayRow[];
   };
   selected_pilot_consistency: ConsistencyRow | null;
   consistency_leaderboard: ConsistencyRow[];

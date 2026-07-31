@@ -56,7 +56,7 @@ export function PilotStatsPage() {
   const [raceClass, setRaceClass] = useState(searchParams.get("class") ?? sessionStorage.getItem("fpvbattle-pilot-class") ?? "open");
   const [dateFrom, setDateFrom] = useState(searchParams.get("from") ?? sessionStorage.getItem("fpvbattle-pilot-from") ?? DEFAULT_FROM);
   const [dateTo, setDateTo] = useState(searchParams.get("to") ?? sessionStorage.getItem("fpvbattle-pilot-to") ?? DEFAULT_TO);
-  const [section, setSection] = useState<PilotSection>((sessionStorage.getItem("fpvbattle-pilot-section") as PilotSection | null) ?? "leader-gap");
+  const [section, setSection] = useState<PilotSection>((searchParams.get("section") as PilotSection | null) ?? (sessionStorage.getItem("fpvbattle-pilot-section") as PilotSection | null) ?? "leader-gap");
   const [streakThreshold, setStreakThreshold] = useState(3);
   const [showLeaderAverage, setShowLeaderAverage] = useState(true);
   const [showFieldAverage, setShowFieldAverage] = useState(true);
@@ -289,7 +289,7 @@ export function PilotStatsPage() {
       ) : null}
 
       {stats.data && section === "streaks" ? <StreakBoard streaks={stats.data.streaks} /> : null}
-      {section === "compare" ? <PilotComparisonPanel primaryPilot={selectedPilot} raceClass={raceClass} dateFrom={dateFrom} dateTo={dateTo} /> : null}
+      {section === "compare" ? <PilotComparisonPanel primaryPilot={selectedPilot} raceClass={raceClass} dateFrom={dateFrom} dateTo={dateTo} initialOpponent={searchParams.get("opponent") ?? undefined} /> : null}
     </div>
   );
 }

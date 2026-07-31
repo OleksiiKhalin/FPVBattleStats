@@ -14,7 +14,7 @@ import { RangeQuickFilters } from "../components/RangeQuickFilters";
 import { usePilot } from "../context/PilotContext";
 import { useApi } from "../hooks/useApi";
 
-type GeneralSection = "countries" | "quads" | "tracks" | "seasons" | "participation" | "consistency";
+type GeneralSection = "countries" | "quads" | "tracks" | "seasons" | "participation" | "easy-days" | "consistency";
 type SortDirection = "asc" | "desc";
 type CountrySortKey = keyof Pick<CountryStatsRow, "country" | "unique_pilots" | "avg_season_score" | "avg_place" | "season_wins" | "medals_per_pilot">;
 type QuadSortKey = keyof Pick<QuadStatsRow, "quad" | "category" | "entries" | "usage_percentage" | "unique_pilots" | "avg_place" | "wins">;
@@ -26,13 +26,16 @@ type ImprovementSortKey = keyof Pick<ConsistencyRow, "pilot" | "country" | "appe
 const DEFAULT_FROM = "2023-11-15";
 const DEFAULT_TO = new Date().toISOString().slice(0, 10);
 
-function buildGeneralStatsPath(raceClass: string, dateFrom: string, dateTo: string, pilotName: string) {
+function buildGeneralStatsPath(raceClass: string, dateFrom: string, dateTo: string, pilotName: string, consistentPilotsOnly: boolean) {
   const params = new URLSearchParams({ pilot_name: pilotName });
   if (dateFrom) {
     params.set("date_from", dateFrom);
   }
   if (dateTo) {
     params.set("date_to", dateTo);
+  }
+  if (consistentPilotsOnly) {
+    params.set("consistent_pilots_only", "true");
   }
   return `/analytics/general-stats/${raceClass}?${params.toString()}`;
 }
@@ -75,6 +78,7 @@ export function GeneralStatsPage() {
   const [dateFrom, setDateFrom] = useState(DEFAULT_FROM);
   const [dateTo, setDateTo] = useState(DEFAULT_TO);
   const [section, setSection] = useState<GeneralSection>("countries");
+  const [consistentPilotsOnly, setConsistentPilotsOnly] = useState(false);
   const [countrySort, setCountrySort] = useState<{ key: CountrySortKey; direction: SortDirection }>({ key: "unique_pilots", direction: "desc" });
   const [quadSort, setQuadSort] = useState<{ key: QuadSortKey; direction: SortDirection }>({ key: "entries", direction: "desc" });
   const [trackSort, setTrackSort] = useState<{ key: TrackSortKey; direction: SortDirection }>({ key: "weighted_score", direction: "desc" });
@@ -83,8 +87,8 @@ export function GeneralStatsPage() {
   const [improvementSort, setImprovementSort] = useState<{ key: ImprovementSortKey; direction: SortDirection }>({ key: "improvement_score", direction: "desc" });
 
   const stats = useApi<GeneralStatsResponse>(
-    () => fetchJson(buildGeneralStatsPath(raceClass, dateFrom, dateTo, selectedPilot)),
-    [raceClass, dateFrom, dateTo, selectedPilot],
+    () => fetchJson(buildGeneralStatsPath(raceClass, dateFrom, dateTo, selectedPilot, consistentPilotsOnly)),
+    [raceClass, dateFrom, dateTo, selectedPilot, consistentPilotsOnly],
   );
 
   const sectionLabel = {
@@ -93,6 +97,7 @@ export function GeneralStatsPage() {
     tracks: "Track Rating",
     seasons: "Season Stats",
     participation: "Participation",
+    "easy-days": "Easy Days",
     consistency: "Consistency",
   };
 
@@ -267,6 +272,40 @@ export function GeneralStatsPage() {
         </section>
       ) : null}
 
+
+      {stats.data && section === "easy-days" ? (() => {
+        const easyDays = stats.data.easy_days;
+        const months = easyDays.daily_gaps.reduce<Record<string, typeof easyDays.daily_gaps>>((groups, day) => {
+          const month = day.date.slice(0, 7);
+          (groups[month] ??= []).push(day);
+          return groups;
+        }, {});
+        const selected = easyDays.selected_day;
+        const decision = selected?.is_favorable === true ? "Favorable: fly" : selected?.is_favorable === false ? "Tough day: consider skipping" : "No completed results";
+        return <div className="stack">
+          <section className="panel">
+            <div className="panel-header">
+              <div><p className="eyebrow">Easy Days</p><h2>When the field stays closer to the leader</h2></div>
+              <label className="toggle-row"><input type="checkbox" checked={consistentPilotsOnly} onChange={(event) => setConsistentPilotsOnly(event.target.checked)} /> Regular pilots only</label>
+            </div>
+            <div className="stat-grid">
+              <div className="stat-card"><span>Selected-day decision</span><strong>{decision}</strong></div>
+              <div className="stat-card"><span>Selected-day avg gap</span><strong>{selected?.average_gap_to_leader ?? "-"}{selected?.average_gap_to_leader !== null && selected?.average_gap_to_leader !== undefined ? " s" : ""}</strong></div>
+              <div className="stat-card"><span>Period avg gap</span><strong>{easyDays.period_average_gap_to_leader ?? "-"}{easyDays.period_average_gap_to_leader !== null ? " s" : ""}</strong></div>
+              <div className="stat-card"><span>Favorable days</span><strong>{easyDays.favorable_days}</strong></div>
+            </div>
+            <p className="chart-note">A favorable day has a lower average gap to that day’s fastest pilot than the selected period’s daily average. {consistentPilotsOnly ? `Only pilots active on at least ${easyDays.regular_pilot_threshold} tracked days are averaged (${easyDays.eligible_pilot_count} eligible).` : "All pilots with a recorded time are averaged."}</p>
+          </section>
+          <section className="panel">
+            <div className="panel-header"><div><p className="eyebrow">Daily leader-gap calendar</p><h2>Lower gap means an easier field</h2></div></div>
+            <div className="comparison-calendar-list">{Object.entries(months).map(([month, days]) => {
+              const blanks = new Date(`${month}-01T00:00:00`).getDay();
+              return <section className="comparison-month" key={month}><h3>{new Date(`${month}-01T00:00:00`).toLocaleDateString(undefined, { month: "long", year: "numeric" })}</h3><div className="comparison-weekdays">{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((label) => <span key={label}>{label}</span>)}</div><div className="comparison-calendar">{Array.from({ length: blanks }, (_, index) => <span className="comparison-day blank" key={`blank-${index}`} />)}{days.map((day) => <div className={`comparison-day easy-day ${day.is_favorable ? "favorable" : "tough"}`} key={day.date} title={`${day.date}: ${day.average_gap_to_leader ?? "no data"} s average gap`}><small>{day.date.slice(8)}</small><strong>{day.average_gap_to_leader ?? "-"}{day.average_gap_to_leader !== null ? " s" : ""}</strong><em>{day.participant_count} pilots</em></div>)}</div></section>;
+            })}</div>
+            <p className="chart-note">Green squares are favorable; red squares are above the period average. Each square shows the field’s average seconds behind the day’s leader.</p>
+          </section>
+        </div>;
+      })() : null}
       {stats.data && section === "consistency" ? (
         <div className="stack">
           <section className="panel">

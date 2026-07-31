@@ -148,6 +148,23 @@ class ParticipationStats(BaseModel):
     participation_trend: float | None = None
 
 
+class EasyDayRow(BaseModel):
+    date: date
+    average_gap_to_leader: float | None = None
+    participant_count: int
+    is_favorable: bool | None = None
+
+
+class EasyDaysStats(BaseModel):
+    consistent_pilots_only: bool
+    regular_pilot_threshold: int
+    eligible_pilot_count: int
+    period_average_gap_to_leader: float | None = None
+    selected_day: EasyDayRow | None = None
+    favorable_days: int
+    daily_gaps: list[EasyDayRow]
+
+
 class ConsistencyRow(BaseModel):
     pilot: str
     country: str | None = None
@@ -170,6 +187,7 @@ class GeneralStatsResponse(BaseModel):
     track_ratings: list[TrackRatingRow]
     seasons: list[SeasonStatsRow]
     participation: ParticipationStats
+    easy_days: EasyDaysStats
     selected_pilot_consistency: ConsistencyRow | None = None
     consistency_leaderboard: list[ConsistencyRow]
     best_improvement: list[ConsistencyRow]

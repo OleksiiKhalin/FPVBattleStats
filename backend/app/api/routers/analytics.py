@@ -86,6 +86,7 @@ def get_general_stats(
     date_from: date | None = Query(default=None),
     date_to: date | None = Query(default=None),
     pilot_name: str | None = Query(default=None),
+    consistent_pilots_only: bool = Query(default=False),
     session: Session = Depends(get_session),
 ) -> GeneralStatsResponse:
     payload = AnalyticsService(session).get_general_stats(
@@ -93,5 +94,6 @@ def get_general_stats(
         date_from=date_from,
         date_to=date_to,
         selected_pilot=pilot_name,
+        consistent_pilots_only=consistent_pilots_only,
     )
     return GeneralStatsResponse.model_validate(payload)

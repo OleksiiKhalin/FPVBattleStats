@@ -312,6 +312,7 @@ class AnalyticsService:
         date_from: date | None,
         date_to: date | None,
         selected_pilot: str | None,
+        consistent_pilots_only: bool = False,
     ) -> dict:
         day_specs = self._get_day_specs(race_class=race_class, date_from=date_from, date_to=date_to)
         day_spec_ids = [day_spec.id for day_spec in day_specs]
@@ -331,6 +332,7 @@ class AnalyticsService:
             "track_ratings": self._build_track_ratings(day_specs),
             "seasons": self._build_season_rows(day_specs, results_by_day, season_rows),
             "participation": self._build_participation_stats(day_specs, results_by_day),
+            "easy_days": self._build_easy_days_stats(day_specs, results_by_day, consistent_pilots_only=consistent_pilots_only, selected_date=date_to),
             "selected_pilot_consistency": next((row for row in consistency_rows if row["pilot"] == selected_pilot), None),
             "consistency_leaderboard": consistency_rows,
             "best_improvement": [
@@ -343,6 +345,37 @@ class AnalyticsService:
             ],
         }
 
+
+    def _build_easy_days_stats(
+        self,
+        day_specs: list[DaySpecModel],
+        results_by_day: dict[int, list[dict]],
+        *,
+        consistent_pilots_only: bool,
+        selected_date: date | None,
+    ) -> dict:
+        """Summarize how tightly the selected population finished behind each day's leader."""
+        threshold = max(1, math.ceil(len(day_specs) * 0.5))
+        appearances: dict[str, int] = defaultdict(int)
+        for day_spec in day_specs:
+            for row in results_by_day.get(day_spec.id, []):
+                if row["time"] is not None:
+                    appearances[row["pilot"]] += 1
+        eligible_pilots = {pilot for pilot, count in appearances.items() if count >= threshold}
+        daily_gaps: list[dict] = []
+        for day_spec in day_specs:
+            timed_rows = [row for row in results_by_day.get(day_spec.id, []) if row["time"] is not None]
+            leader_time = min((row["time"] for row in timed_rows), default=None)
+            population = [row for row in timed_rows if not consistent_pilots_only or row["pilot"] in eligible_pilots]
+            average_gap = round(sum(row["time"] - leader_time for row in population) / len(population), 3) if leader_time is not None and population else None
+            daily_gaps.append({"date": day_spec.date, "average_gap_to_leader": average_gap, "participant_count": len(population)})
+        average_values = [row["average_gap_to_leader"] for row in daily_gaps if row["average_gap_to_leader"] is not None]
+        period_average = round(sum(average_values) / len(average_values), 3) if average_values else None
+        for row in daily_gaps:
+            row["is_favorable"] = row["average_gap_to_leader"] < period_average if row["average_gap_to_leader"] is not None and period_average is not None else None
+        target_date = selected_date or (day_specs[-1].date if day_specs else None)
+        selected_day = next((row for row in daily_gaps if row["date"] == target_date), None)
+        return {"consistent_pilots_only": consistent_pilots_only, "regular_pilot_threshold": threshold, "eligible_pilot_count": len(eligible_pilots), "period_average_gap_to_leader": period_average, "selected_day": selected_day, "favorable_days": sum(1 for row in daily_gaps if row["is_favorable"]), "daily_gaps": daily_gaps}
     def _get_day_specs(self, *, race_class: str, date_from: date | None, date_to: date | None) -> list[DaySpecModel]:
         statement = select(DaySpecModel).where(DaySpecModel.race_class == race_class)
         if date_from is not None:
