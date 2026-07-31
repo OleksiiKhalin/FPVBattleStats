@@ -4,12 +4,13 @@ import { useSearchParams } from "react-router-dom";
 
 import { fetchJson } from "../api/client";
 import type { PilotStatsResponse, PilotTimelinePoint } from "../api/types";
+import { PilotComparisonPanel } from "../components/PilotComparisonPanel";
 import { RangeQuickFilters } from "../components/RangeQuickFilters";
 import { StreakBoard } from "../components/StreakBoard";
 import { usePilot } from "../context/PilotContext";
 import { useApi } from "../hooks/useApi";
 
-type PilotSection = "leader-gap" | "logarithmic" | "time-comparison" | "streaks";
+type PilotSection = "leader-gap" | "logarithmic" | "time-comparison" | "streaks" | "compare";
 
 const DEFAULT_FROM = "2023-11-15";
 const DEFAULT_TO = new Date().toISOString().slice(0, 10);
@@ -21,11 +22,13 @@ function buildPilotStatsPath(
   dateTo: string,
   streakThreshold: number,
 ) {
-  const params = new URLSearchParams({
-    date_from: dateFrom,
-    date_to: dateTo,
-    streak_threshold: String(streakThreshold),
-  });
+  const params = new URLSearchParams({ streak_threshold: String(streakThreshold) });
+  if (dateFrom) {
+    params.set("date_from", dateFrom);
+  }
+  if (dateTo) {
+    params.set("date_to", dateTo);
+  }
   return `/analytics/pilot-stats/${raceClass}/${encodeURIComponent(pilot)}?${params.toString()}`;
 }
 
@@ -34,9 +37,12 @@ function trimTimeline(points: PilotTimelinePoint[]) {
   return firstIndex >= 0 ? points.slice(firstIndex) : points;
 }
 
-function rollingAverage(values: Array<number | null>, windowSize: number) {
+function rollingAverage(values: Array<number | null>, windowSize: number, excludeWorst = false) {
   return values.map((_, index) => {
     const windowValues = values.slice(Math.max(0, index - windowSize + 1), index + 1).filter((value): value is number => value !== null);
+    if (excludeWorst && windowValues.length > 1) {
+      windowValues.splice(windowValues.indexOf(Math.max(...windowValues)), 1);
+    }
     if (!windowValues.length) {
       return null;
     }
@@ -54,6 +60,9 @@ export function PilotStatsPage() {
   const [streakThreshold, setStreakThreshold] = useState(3);
   const [showLeaderAverage, setShowLeaderAverage] = useState(true);
   const [showFieldAverage, setShowFieldAverage] = useState(true);
+  const [showEverydayGap, setShowEverydayGap] = useState(true);
+  const [excludeWorstWeekly, setExcludeWorstWeekly] = useState(false);
+  const [excludeWorstMonthly, setExcludeWorstMonthly] = useState(false);
   const [showPilotTime, setShowPilotTime] = useState(true);
   const [showWeeklyAverage, setShowWeeklyAverage] = useState(false);
   const [showMonthlyAverage, setShowMonthlyAverage] = useState(false);
@@ -75,6 +84,7 @@ export function PilotStatsPage() {
     logarithmic: "Logarithmic View",
     "time-comparison": "Time Comparison",
     streaks: "Day Streaks",
+    compare: "Compare",
   };
 
   const handleThresholdChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -92,15 +102,15 @@ export function PilotStatsPage() {
       }
       return Number((((point.pilot_time - point.leader_average_time) / point.leader_average_time) * 100).toFixed(3));
     });
-    const weekly = rollingAverage(gapPercentValues, 7);
-    const monthly = rollingAverage(gapPercentValues, 30);
+    const weekly = rollingAverage(gapPercentValues, 7, excludeWorstWeekly);
+    const monthly = rollingAverage(gapPercentValues, 30, excludeWorstMonthly);
     return timeline.map((point, index) => ({
       date: point.date,
       gap_percent_to_top3: gapPercentValues[index],
       weekly_average_gap_percent: weekly[index],
       monthly_average_gap_percent: monthly[index],
     }));
-  }, [stats.data]);
+  }, [excludeWorstMonthly, excludeWorstWeekly, stats.data]);
 
   return (
     <div className="stack">
@@ -138,7 +148,10 @@ export function PilotStatsPage() {
           </label>
         </div>
 
-        <RangeQuickFilters onApply={(from, to) => { setDateFrom(from); setDateTo(to); }} />
+        <RangeQuickFilters
+          onApply={(from, to) => { setDateFrom(from); setDateTo(to); }}
+          onClear={() => { setDateFrom(""); setDateTo(""); }}
+        />
 
         <div className="section-tabs">
           {Object.entries(sectionLabel).map(([value, label]) => (
@@ -165,8 +178,11 @@ export function PilotStatsPage() {
               <h2>Gap to top-3 average (%)</h2>
             </div>
             <div className="toggle-row">
+              <label><input type="checkbox" checked={showEverydayGap} onChange={() => setShowEverydayGap((value) => !value)} /> Daily gap (%)</label>
               <label><input type="checkbox" checked={showWeeklyAverage} onChange={() => setShowWeeklyAverage((value) => !value)} /> Weekly average (%)</label>
+              <label><input type="checkbox" checked={excludeWorstWeekly} onChange={() => setExcludeWorstWeekly((value) => !value)} /> Exclude worst day (weekly)</label>
               <label><input type="checkbox" checked={showMonthlyAverage} onChange={() => setShowMonthlyAverage((value) => !value)} /> Monthly average (%)</label>
+              <label><input type="checkbox" checked={excludeWorstMonthly} onChange={() => setExcludeWorstMonthly((value) => !value)} /> Exclude worst day (monthly)</label>
             </div>
           </div>
           <div className="chart-actions">
@@ -179,7 +195,7 @@ export function PilotStatsPage() {
               <YAxis unit="%" />
               <Tooltip />
               <Legend />
-              <Line type="monotone" dataKey="gap_percent_to_top3" stroke="#7ef3c5" strokeWidth={2.5} connectNulls={false} name="Gap to top-3 avg (%)" />
+              {showEverydayGap ? <Line type="monotone" dataKey="gap_percent_to_top3" stroke="#7ef3c5" strokeWidth={2.5} connectNulls={false} name="Gap to top-3 avg (%)" /> : null}
               {showWeeklyAverage ? <Line type="monotone" dataKey="weekly_average_gap_percent" stroke="#ff9d5c" strokeWidth={2} dot={false} name="Weekly avg gap (%)" /> : null}
               {showMonthlyAverage ? <Line type="monotone" dataKey="monthly_average_gap_percent" stroke="#ffe072" strokeWidth={2} dot={false} name="Monthly avg gap (%)" /> : null}
               <Brush dataKey="date" height={24} stroke="#7ef3c5" travellerWidth={10} />
@@ -257,6 +273,7 @@ export function PilotStatsPage() {
       ) : null}
 
       {stats.data && section === "streaks" ? <StreakBoard streaks={stats.data.streaks} /> : null}
+      {section === "compare" ? <PilotComparisonPanel primaryPilot={selectedPilot} raceClass={raceClass} dateFrom={dateFrom} dateTo={dateTo} /> : null}
     </div>
   );
 }

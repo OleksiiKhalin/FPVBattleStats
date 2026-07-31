@@ -108,6 +108,125 @@ class AnalyticsService:
             "streaks": self._calculate_streaks(active_dates, threshold=threshold),
         }
 
+
+    def get_pilot_comparison(
+        self,
+        *,
+        primary_pilot: str,
+        opponent_pilot: str,
+        race_class: str,
+        date_from: date | None,
+        date_to: date | None,
+        season: str | None,
+    ) -> dict:
+        all_seasons = list(
+            self.session.execute(
+                select(DaySpecModel.season)
+                .where(DaySpecModel.race_class == race_class)
+                .distinct()
+                .order_by(DaySpecModel.season.desc()),
+            ).scalars(),
+        )
+        day_specs = self._get_day_specs(race_class=race_class, date_from=date_from, date_to=date_to)
+        if season:
+            day_specs = [day_spec for day_spec in day_specs if day_spec.season == season]
+        results_by_day = self._results_by_day([day_spec.id for day_spec in day_specs])
+        primary_stats = self._build_comparison_pilot_stats(primary_pilot, day_specs, results_by_day)
+        opponent_stats = self._build_comparison_pilot_stats(opponent_pilot, day_specs, results_by_day)
+
+        shared_days = 0
+        primary_wins = 0
+        days: list[dict] = []
+        for day_spec in day_specs:
+            rows = results_by_day.get(day_spec.id, [])
+            primary_row = next((row for row in rows if row["pilot"] == primary_pilot), None)
+            opponent_row = next((row for row in rows if row["pilot"] == opponent_pilot), None)
+            primary_time = primary_row["time"] if primary_row else None
+            opponent_time = opponent_row["time"] if opponent_row else None
+            difference_seconds = None
+            difference_percent = None
+            if primary_time is not None and opponent_time is not None:
+                shared_days += 1
+                difference_seconds = round(opponent_time - primary_time, 3)
+                baseline = min(primary_time, opponent_time)
+                difference_percent = round((difference_seconds / baseline) * 100, 3) if baseline else None
+                if primary_time < opponent_time:
+                    primary_wins += 1
+            days.append(
+                {
+                    "date": day_spec.date,
+                    "primary_time": primary_time,
+                    "opponent_time": opponent_time,
+                    "difference_seconds": difference_seconds,
+                    "difference_percent": difference_percent,
+                },
+            )
+
+        return {
+            "primary_pilot": primary_pilot,
+            "opponent_pilot": opponent_pilot,
+            "race_class": race_class,
+            "date_from": date_from,
+            "date_to": date_to,
+            "season": season,
+            "seasons": all_seasons,
+            "shared_days": shared_days,
+            "primary_wins": primary_wins,
+            "win_rate": round((primary_wins / shared_days) * 100, 2) if shared_days else None,
+            "primary": primary_stats,
+            "opponent": opponent_stats,
+            "days": days,
+        }
+
+    def _build_comparison_pilot_stats(
+        self,
+        pilot_name: str,
+        day_specs: list[DaySpecModel],
+        results_by_day: dict[int, list[dict]],
+    ) -> dict:
+        category_places: dict[str, list[int]] = {"unranked": [], "silver": [], "gold": [], "bronze": []}
+        active_dates: list[date] = []
+        gaps: list[float] = []
+        total_score = 0
+
+        for day_spec in day_specs:
+            rows = results_by_day.get(day_spec.id, [])
+            pilot_row = next((row for row in rows if row["pilot"] == pilot_name), None)
+            if pilot_row is None:
+                continue
+            active_dates.append(day_spec.date)
+            if pilot_row["points"] is not None:
+                total_score += pilot_row["points"]
+            category = (pilot_row["category"] or "unranked").lower()
+            if category in category_places and pilot_row["place"] is not None:
+                category_places[category].append(pilot_row["place"])
+            timed_rows = [row for row in rows if row["time"] is not None]
+            if pilot_row["time"] is not None and timed_rows:
+                leader_time = min(row["time"] for row in timed_rows)
+                gaps.append(pilot_row["time"] - leader_time)
+
+        return {
+            "flights": len(active_dates),
+            "longest_streak": self._longest_streak(active_dates),
+            "average_gap_to_leader": round(sum(gaps) / len(gaps), 3) if gaps else None,
+            "total_score": total_score,
+            "average_place_by_category": {
+                category: round(sum(places) / len(places), 2) if places else None
+                for category, places in category_places.items()
+            },
+        }
+
+    @staticmethod
+    def _longest_streak(dates: list[date]) -> int:
+        longest = 0
+        current = 0
+        previous: date | None = None
+        for race_date in dates:
+            current = current + 1 if previous and race_date == previous + timedelta(days=1) else 1
+            longest = max(longest, current)
+            previous = race_date
+        return longest
+
     def get_pilot_hover_card(self, *, pilot_name: str, race_class: str, target_date: date) -> dict:
         target_day = self.session.execute(
             select(DaySpecModel).where(DaySpecModel.race_class == race_class, DaySpecModel.date == target_date),

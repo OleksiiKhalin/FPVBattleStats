@@ -46,6 +46,38 @@ class PilotStatsResponse(BaseModel):
     streaks: PilotStreakSummary
 
 
+class PilotComparisonPilotStats(BaseModel):
+    flights: int
+    longest_streak: int
+    average_gap_to_leader: float | None = None
+    total_score: int
+    average_place_by_category: dict[str, float | None]
+
+
+class PilotComparisonDay(BaseModel):
+    date: date
+    primary_time: float | None = None
+    opponent_time: float | None = None
+    difference_seconds: float | None = None
+    difference_percent: float | None = None
+
+
+class PilotComparisonResponse(BaseModel):
+    primary_pilot: str
+    opponent_pilot: str
+    race_class: str
+    date_from: date | None = None
+    date_to: date | None = None
+    season: str | None = None
+    seasons: list[str]
+    shared_days: int
+    primary_wins: int
+    win_rate: float | None = None
+    primary: PilotComparisonPilotStats
+    opponent: PilotComparisonPilotStats
+    days: list[PilotComparisonDay]
+
+
 class PilotHoverTimelinePoint(BaseModel):
     date: date
     participated: bool

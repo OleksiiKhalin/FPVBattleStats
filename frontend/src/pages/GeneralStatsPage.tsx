@@ -27,11 +27,13 @@ const DEFAULT_FROM = "2023-11-15";
 const DEFAULT_TO = new Date().toISOString().slice(0, 10);
 
 function buildGeneralStatsPath(raceClass: string, dateFrom: string, dateTo: string, pilotName: string) {
-  const params = new URLSearchParams({
-    date_from: dateFrom,
-    date_to: dateTo,
-    pilot_name: pilotName,
-  });
+  const params = new URLSearchParams({ pilot_name: pilotName });
+  if (dateFrom) {
+    params.set("date_from", dateFrom);
+  }
+  if (dateTo) {
+    params.set("date_to", dateTo);
+  }
   return `/analytics/general-stats/${raceClass}?${params.toString()}`;
 }
 
@@ -133,7 +135,10 @@ export function GeneralStatsPage() {
           </label>
         </div>
 
-        <RangeQuickFilters onApply={(from, to) => { setDateFrom(from); setDateTo(to); }} />
+        <RangeQuickFilters
+          onApply={(from, to) => { setDateFrom(from); setDateTo(to); }}
+          onClear={() => { setDateFrom(""); setDateTo(""); }}
+        />
 
         <div className="section-tabs">
           {Object.entries(sectionLabel).map(([value, label]) => (

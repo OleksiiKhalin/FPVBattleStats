@@ -1,5 +1,6 @@
 type Props = {
   onApply: (from: string, to: string) => void;
+  onClear: () => void;
 };
 
 function formatDate(value: Date) {
@@ -13,7 +14,7 @@ function shiftDays(days: number) {
   return { from: formatDate(start), to: formatDate(end) };
 }
 
-export function RangeQuickFilters({ onApply }: Props) {
+export function RangeQuickFilters({ onApply, onClear }: Props) {
   const options = [
     { label: "Last week", days: 7 },
     { label: "Last month", days: 30 },
@@ -36,6 +37,9 @@ export function RangeQuickFilters({ onApply }: Props) {
           {option.label}
         </button>
       ))}
+      <button type="button" className="chip" onClick={onClear}>
+        Clear dates
+      </button>
     </div>
   );
 }

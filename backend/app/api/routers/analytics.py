@@ -4,7 +4,13 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from ..dependencies import get_session
-from ...schemas.analytics import GeneralStatsResponse, PilotHoverCardResponse, PilotOption, PilotStatsResponse
+from ...schemas.analytics import (
+    GeneralStatsResponse,
+    PilotComparisonResponse,
+    PilotHoverCardResponse,
+    PilotOption,
+    PilotStatsResponse,
+)
 from ...services.analytics_service import AnalyticsService
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
@@ -36,6 +42,27 @@ def get_pilot_stats(
         streak_threshold=streak_threshold,
     )
     return PilotStatsResponse.model_validate(payload)
+
+
+@router.get("/pilot-compare/{race_class}/{primary_pilot}/{opponent_pilot}", response_model=PilotComparisonResponse)
+def get_pilot_comparison(
+    race_class: str,
+    primary_pilot: str,
+    opponent_pilot: str,
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
+    season: str | None = Query(default=None),
+    session: Session = Depends(get_session),
+) -> PilotComparisonResponse:
+    payload = AnalyticsService(session).get_pilot_comparison(
+        primary_pilot=primary_pilot,
+        opponent_pilot=opponent_pilot,
+        race_class=race_class,
+        date_from=date_from,
+        date_to=date_to,
+        season=season,
+    )
+    return PilotComparisonResponse.model_validate(payload)
 
 
 @router.get("/pilot-hover/{race_class}/{pilot_name}", response_model=PilotHoverCardResponse)

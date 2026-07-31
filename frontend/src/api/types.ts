@@ -146,3 +146,36 @@ export type GeneralStatsResponse = {
   consistency_leaderboard: ConsistencyRow[];
   best_improvement: ConsistencyRow[];
 };
+
+
+export type PilotComparisonPilotStats = {
+  flights: number;
+  longest_streak: number;
+  average_gap_to_leader: number | null;
+  total_score: number;
+  average_place_by_category: Record<string, number | null>;
+};
+
+export type PilotComparisonDay = {
+  date: string;
+  primary_time: number | null;
+  opponent_time: number | null;
+  difference_seconds: number | null;
+  difference_percent: number | null;
+};
+
+export type PilotComparisonResponse = {
+  primary_pilot: string;
+  opponent_pilot: string;
+  race_class: string;
+  date_from: string | null;
+  date_to: string | null;
+  season: string | null;
+  seasons: string[];
+  shared_days: number;
+  primary_wins: number;
+  win_rate: number | null;
+  primary: PilotComparisonPilotStats;
+  opponent: PilotComparisonPilotStats;
+  days: PilotComparisonDay[];
+};
