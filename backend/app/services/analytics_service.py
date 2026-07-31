@@ -260,7 +260,7 @@ class AnalyticsService:
             "wins_against_viewpoint": 0, "win_rate_against_viewpoint": None, "timeline": [],
         }
         if not season_days:
-            return {"pilot": pilot_name, "race_class": race_class, "season": season, "target_date": target_date, **empty_stats}
+            return {"pilot": pilot_name, "viewpoint_pilot": viewpoint_pilot, "race_class": race_class, "season": season, "target_date": target_date, **empty_stats}
 
         results_by_day = self._results_by_day([day.id for day in season_days])
         timeline: list[dict] = []

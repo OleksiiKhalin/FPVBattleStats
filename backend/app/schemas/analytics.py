@@ -91,6 +91,7 @@ class PilotHoverTimelinePoint(BaseModel):
 
 class PilotHoverCardResponse(BaseModel):
     pilot: str
+    viewpoint_pilot: str | None = None
     race_class: str
     season: str
     target_date: date

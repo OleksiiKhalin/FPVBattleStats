@@ -26,12 +26,12 @@ export function PilotHoverCard({ data, x, y }: Props) {
         <div className="meta"><span>{data.season}</span><span>Skipped: {data.skipped_days}</span></div>
       </div>
       <div className="hover-kpis">
-        <span>Season points <strong>{data.season_points ?? "-"}</strong></span>
+        <span>Points to this day <strong>{data.season_points ?? "-"}</strong></span>
         <span>Average place <strong>{data.average_place ?? "-"}</strong></span>
-        <span>Season wins <strong>{data.season_wins} / {data.appearances}</strong></span>
-        <span>Season win rate <strong>{formatPercent(data.season_win_rate)}</strong></span>
-        <span>Vs viewpoint <strong>{data.wins_against_viewpoint} / {data.shared_days_with_viewpoint}</strong></span>
-        <span>Vs viewpoint win rate <strong>{formatPercent(data.win_rate_against_viewpoint)}</strong></span>
+        <span>Days finished first <strong>{data.season_wins} / {data.appearances}</strong></span>
+        <span>First-place rate <strong>{formatPercent(data.season_win_rate)}</strong></span>
+        <span>Wins vs {data.viewpoint_pilot ?? "viewpoint"} <strong>{data.wins_against_viewpoint} / {data.shared_days_with_viewpoint}</strong></span>
+        <span>Head-to-head win rate <strong>{formatPercent(data.win_rate_against_viewpoint)}</strong></span>
       </div>
       <p className="chart-note">Points and season statistics include results through the viewed leaderboard date.</p>
     </aside>,

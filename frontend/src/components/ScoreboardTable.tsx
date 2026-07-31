@@ -36,7 +36,7 @@ function formatTime(value: number | null) {
 }
 
 export function ScoreboardTable({ data, selectedDate }: Props) {
-  const { selectedPilot, setSelectedPilot } = usePilot();
+  const { selectedPilot } = usePilot();
   const [hoverState, setHoverState] = useState<HoverState | null>(null);
   const groups = groupRows(data.rows);
 
@@ -109,8 +109,7 @@ export function ScoreboardTable({ data, selectedDate }: Props) {
                     <td>{row.place ?? "-"}</td>
                     <td>
                       <Link
-                        to={`/pilot-stats?class=${data.race_class}&pilot=${encodeURIComponent(row.pilot)}`}
-                        onClick={() => setSelectedPilot(row.pilot)}
+                        to={`/pilot-stats?class=${data.race_class}&pilot=${encodeURIComponent(selectedPilot)}&section=compare&opponent=${encodeURIComponent(row.pilot)}`}
                       >
                         {row.pilot}
                       </Link>

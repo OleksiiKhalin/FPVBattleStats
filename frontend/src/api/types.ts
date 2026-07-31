@@ -65,6 +65,7 @@ export type PilotHoverTimelinePoint = {
 
 export type PilotHoverCardResponse = {
   pilot: string;
+  viewpoint_pilot: string | null;
   race_class: string;
   season: string;
   target_date: string;
