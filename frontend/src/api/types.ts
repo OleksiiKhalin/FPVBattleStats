@@ -162,6 +162,10 @@ export type PilotComparisonDay = {
   opponent_time: number | null;
   difference_seconds: number | null;
   difference_percent: number | null;
+  primary_gap_to_leader: number | null;
+  opponent_gap_to_leader: number | null;
+  primary_place: number | null;
+  opponent_place: number | null;
 };
 
 export type PilotComparisonResponse = {

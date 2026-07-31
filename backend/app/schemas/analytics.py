@@ -60,6 +60,10 @@ class PilotComparisonDay(BaseModel):
     opponent_time: float | None = None
     difference_seconds: float | None = None
     difference_percent: float | None = None
+    primary_gap_to_leader: float | None = None
+    opponent_gap_to_leader: float | None = None
+    primary_place: int | None = None
+    opponent_place: int | None = None
 
 
 class PilotComparisonResponse(BaseModel):

@@ -129,13 +129,12 @@ export function PilotStatsPage() {
         </div>
 
         <div className="filters-grid">
-          <label className="field">
+          <div className="field">
             <span>Class</span>
-            <select value={raceClass} onChange={(event) => setRaceClass(event.target.value)}>
-              <option value="open">Open</option>
-              <option value="whoop">Whoop</option>
-            </select>
-          </label>
+            <button type="button" className="class-switch" onClick={() => setRaceClass((value) => value === "open" ? "whoop" : "open")}>
+              {raceClass === "open" ? "Open" : "Whoop"}
+            </button>
+          </div>
           <label className="field">
             <span>From</span>
             <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />

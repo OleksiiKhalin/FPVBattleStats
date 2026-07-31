@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Route, Routes, useLocation } from "react-router-dom";
 
 import { PilotSelector } from "./components/PilotSelector";
@@ -11,6 +11,11 @@ const TODAY = new Date().toISOString().slice(0, 10);
 export function App() {
   const location = useLocation();
   const [selectedDailyDate, setSelectedDailyDate] = useState(TODAY);
+  useEffect(() => {
+    const date = new URLSearchParams(location.search).get("date");
+    if (date) setSelectedDailyDate(date);
+  }, [location.search]);
+
   const navClass = ({ isActive }: { isActive: boolean }) => (isActive ? "tab active" : "tab");
   const isDailyPage = location.pathname === "/" || location.pathname === "/open" || location.pathname === "/whoop";
 
