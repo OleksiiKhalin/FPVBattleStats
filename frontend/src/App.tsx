@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 import { PilotSelector } from "./components/PilotSelector";
+import { usePilot } from "./context/PilotContext";
 import { DailyScoreboardPage } from "./pages/DailyScoreboardPage";
 import { GeneralStatsPage } from "./pages/GeneralStatsPage";
 import { PilotStatsPage } from "./pages/PilotStatsPage";
@@ -9,9 +10,10 @@ import { PilotStatsPage } from "./pages/PilotStatsPage";
 const TODAY = new Date().toISOString().slice(0, 10);
 
 export function App() {
+  const { selectedPilot } = usePilot();
   const location = useLocation();
   const navigate = useNavigate();
-  const compareReturn = (location.state as { compareReturn?: string } | null)?.compareReturn;
+  const compareReturn = new URLSearchParams(location.search).get("compare_return") ?? (location.state as { compareReturn?: string } | null)?.compareReturn;
   const [selectedDailyDate, setSelectedDailyDate] = useState(TODAY);
   useEffect(() => {
     const date = new URLSearchParams(location.search).get("date");
@@ -19,6 +21,7 @@ export function App() {
   }, [location.search]);
 
   const navClass = ({ isActive }: { isActive: boolean }) => (isActive ? "tab active" : "tab");
+  const pilotSearch = `?pilot=${encodeURIComponent(selectedPilot)}`;
   const isDailyPage = location.pathname === "/" || location.pathname === "/open" || location.pathname === "/whoop";
 
   return (
@@ -48,16 +51,16 @@ export function App() {
       </header>
 
       <nav className="tabs">
-        <NavLink to="/open" className={navClass}>
+        <NavLink to={`/open${pilotSearch}`} className={navClass}>
           Open Daily
         </NavLink>
-        <NavLink to="/whoop" className={navClass}>
+        <NavLink to={`/whoop${pilotSearch}`} className={navClass}>
           Whoop Daily
         </NavLink>
-        <NavLink to="/pilot-stats" className={navClass}>
+        <NavLink to={`/pilot-stats${pilotSearch}`} className={navClass}>
           Pilot Stats
         </NavLink>
-        <NavLink to="/general-stats" className={navClass}>
+        <NavLink to={`/general-stats${pilotSearch}`} className={navClass}>
           General Stats
         </NavLink>
       </nav>

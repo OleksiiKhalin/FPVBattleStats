@@ -800,3 +800,11 @@ h3 {
   font-style: normal;
   opacity: 0.8;
 }
+.comparison-controls:has(.combo-menu) {
+  position: relative;
+  z-index: 200;
+}
+
+.comparison-picker .combo-menu {
+  z-index: 220;
+}

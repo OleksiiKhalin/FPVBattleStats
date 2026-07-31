@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import { fetchJson } from "../api/client";
 import type { PilotOption } from "../api/types";
@@ -7,6 +8,8 @@ import { useApi } from "../hooks/useApi";
 
 export function PilotSelector() {
   const { selectedPilot, setSelectedPilot, pilotOptions, setPilotOptions } = usePilot();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [query, setQuery] = useState(selectedPilot);
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -42,10 +45,18 @@ export function PilotSelector() {
       .slice(0, 24);
   }, [pilotOptions, query]);
 
+  useEffect(() => {
+    const pilotFromUrl = new URLSearchParams(location.search).get("pilot");
+    if (pilotFromUrl && pilotFromUrl !== selectedPilot) setSelectedPilot(pilotFromUrl);
+  }, [location.search, selectedPilot, setSelectedPilot]);
+
   const selectPilot = (pilot: string) => {
     setSelectedPilot(pilot);
     setQuery(pilot);
     setOpen(false);
+    const params = new URLSearchParams(location.search);
+    params.set("pilot", pilot);
+    navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
   };
 
   return (

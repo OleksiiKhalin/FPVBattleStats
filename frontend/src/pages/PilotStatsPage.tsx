@@ -52,12 +52,13 @@ function rollingAverage(values: Array<number | null>, windowSize: number, exclud
 
 export function PilotStatsPage() {
   const { selectedPilot, setSelectedPilot } = usePilot();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [raceClass, setRaceClass] = useState(searchParams.get("class") ?? sessionStorage.getItem("fpvbattle-pilot-class") ?? "open");
   const [dateFrom, setDateFrom] = useState(searchParams.get("from") ?? sessionStorage.getItem("fpvbattle-pilot-from") ?? DEFAULT_FROM);
   const [dateTo, setDateTo] = useState(searchParams.get("to") ?? sessionStorage.getItem("fpvbattle-pilot-to") ?? DEFAULT_TO);
   const [section, setSection] = useState<PilotSection>((searchParams.get("section") as PilotSection | null) ?? (sessionStorage.getItem("fpvbattle-pilot-section") as PilotSection | null) ?? "leader-gap");
   const [streakThreshold, setStreakThreshold] = useState(3);
+  const [comparisonOpponent, setComparisonOpponent] = useState(searchParams.get("opponent") ?? sessionStorage.getItem("fpvbattle-comparison-opponent") ?? "");
   const [showLeaderAverage, setShowLeaderAverage] = useState(true);
   const [showFieldAverage, setShowFieldAverage] = useState(true);
   const [showEverydayGap, setShowEverydayGap] = useState(true);
@@ -73,6 +74,14 @@ export function PilotStatsPage() {
       setSelectedPilot(pilotFromQuery);
     }
   }, [searchParams, setSelectedPilot]);
+
+  useEffect(() => {
+    const params = new URLSearchParams({ class: raceClass, pilot: selectedPilot, section });
+    if (dateFrom) params.set("from", dateFrom);
+    if (dateTo) params.set("to", dateTo);
+    if (comparisonOpponent) params.set("opponent", comparisonOpponent);
+    if (params.toString() !== searchParams.toString()) setSearchParams(params, { replace: true });
+  }, [comparisonOpponent, dateFrom, dateTo, raceClass, searchParams, section, selectedPilot, setSearchParams]);
 
   useEffect(() => {
     sessionStorage.setItem("fpvbattle-pilot-class", raceClass);
@@ -289,7 +298,7 @@ export function PilotStatsPage() {
       ) : null}
 
       {stats.data && section === "streaks" ? <StreakBoard streaks={stats.data.streaks} /> : null}
-      {section === "compare" ? <PilotComparisonPanel primaryPilot={selectedPilot} raceClass={raceClass} dateFrom={dateFrom} dateTo={dateTo} initialOpponent={searchParams.get("opponent") ?? undefined} /> : null}
+      {section === "compare" ? <PilotComparisonPanel primaryPilot={selectedPilot} raceClass={raceClass} dateFrom={dateFrom} dateTo={dateTo} initialOpponent={comparisonOpponent || undefined} onOpponentChange={setComparisonOpponent} /> : null}
     </div>
   );
 }
