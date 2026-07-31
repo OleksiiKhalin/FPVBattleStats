@@ -69,14 +69,14 @@ export function PilotStatsPage() {
   const [showMonthlyAverage, setShowMonthlyAverage] = useState(false);
 
   useEffect(() => {
-    const pilotFromQuery = searchParams.get("pilot");
+    const pilotFromQuery = searchParams.get("viewpoint") ?? searchParams.get("pilot");
     if (pilotFromQuery) {
       setSelectedPilot(pilotFromQuery);
     }
   }, [searchParams, setSelectedPilot]);
 
   useEffect(() => {
-    const params = new URLSearchParams({ class: raceClass, pilot: selectedPilot, section });
+    const params = new URLSearchParams({ class: raceClass, viewpoint: selectedPilot, section });
     if (dateFrom) params.set("from", dateFrom);
     if (dateTo) params.set("to", dateTo);
     if (comparisonOpponent) params.set("opponent", comparisonOpponent);

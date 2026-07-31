@@ -46,7 +46,8 @@ export function PilotSelector() {
   }, [pilotOptions, query]);
 
   useEffect(() => {
-    const pilotFromUrl = new URLSearchParams(location.search).get("pilot");
+    const params = new URLSearchParams(location.search);
+    const pilotFromUrl = location.pathname === "/pilot-stats" ? (params.get("viewpoint") ?? params.get("pilot")) : params.get("pilot");
     if (pilotFromUrl && pilotFromUrl !== selectedPilot) setSelectedPilot(pilotFromUrl);
   }, [location.search, selectedPilot, setSelectedPilot]);
 
@@ -55,7 +56,12 @@ export function PilotSelector() {
     setQuery(pilot);
     setOpen(false);
     const params = new URLSearchParams(location.search);
-    params.set("pilot", pilot);
+    if (location.pathname === "/pilot-stats") {
+      params.set("viewpoint", pilot);
+      params.delete("pilot");
+    } else {
+      params.set("pilot", pilot);
+    }
     navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
   };
 

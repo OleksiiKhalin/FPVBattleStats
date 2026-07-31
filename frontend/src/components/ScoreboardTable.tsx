@@ -109,7 +109,7 @@ export function ScoreboardTable({ data, selectedDate }: Props) {
                     <td>{row.place ?? "-"}</td>
                     <td>
                       <Link
-                        to={`/pilot-stats?class=${data.race_class}&pilot=${encodeURIComponent(selectedPilot)}&section=compare&opponent=${encodeURIComponent(row.pilot)}`}
+                        to={`/pilot-stats?class=${data.race_class}&viewpoint=${encodeURIComponent(selectedPilot)}&section=compare&opponent=${encodeURIComponent(row.pilot)}`}
                       >
                         {row.pilot}
                       </Link>
