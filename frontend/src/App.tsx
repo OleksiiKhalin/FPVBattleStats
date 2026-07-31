@@ -14,6 +14,7 @@ export function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const compareReturn = new URLSearchParams(location.search).get("compare_return") ?? (location.state as { compareReturn?: string } | null)?.compareReturn;
+  const generalReturn = new URLSearchParams(location.search).get("general_return");
   const [selectedDailyDate, setSelectedDailyDate] = useState(TODAY);
   useEffect(() => {
     const date = new URLSearchParams(location.search).get("date");
@@ -33,6 +34,7 @@ export function App() {
         </div>
         <div className="topbar-controls">
           {isDailyPage && compareReturn ? <button type="button" className="chip" onClick={() => navigate(compareReturn)}>Back to comparison</button> : null}
+          {isDailyPage && generalReturn ? <button type="button" className="chip" onClick={() => navigate(generalReturn)}>Back to General Stats</button> : null}
           {isDailyPage ? (
             <label className="date-selector">
               <span>Daily date</span>
@@ -60,7 +62,7 @@ export function App() {
         <NavLink to={`/pilot-stats${pilotSearch}`} className={navClass}>
           Pilot Stats
         </NavLink>
-        <NavLink to={`/general-stats${pilotSearch}`} className={navClass}>
+        <NavLink to={generalReturn ?? `/general-stats${pilotSearch}`} className={navClass}>
           General Stats
         </NavLink>
       </nav>

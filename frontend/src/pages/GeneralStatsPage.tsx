@@ -1,6 +1,6 @@
 import { Bar, BarChart, Brush, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { fetchJson } from "../api/client";
 import type {
@@ -75,11 +75,12 @@ function toggleSort<T extends string>(
 
 export function GeneralStatsPage() {
   const { selectedPilot } = usePilot();
-  const [raceClass, setRaceClass] = useState("open");
-  const [dateFrom, setDateFrom] = useState(DEFAULT_FROM);
-  const [dateTo, setDateTo] = useState(DEFAULT_TO);
-  const [section, setSection] = useState<GeneralSection>("countries");
-  const [consistentPilotsOnly, setConsistentPilotsOnly] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [raceClass, setRaceClass] = useState(searchParams.get("class") ?? "open");
+  const [dateFrom, setDateFrom] = useState(searchParams.get("from") ?? DEFAULT_FROM);
+  const [dateTo, setDateTo] = useState(searchParams.get("to") ?? DEFAULT_TO);
+  const [section, setSection] = useState<GeneralSection>((searchParams.get("section") as GeneralSection | null) ?? "countries");
+  const [consistentPilotsOnly, setConsistentPilotsOnly] = useState(searchParams.get("consistent") === "true");
   const [seasonScope, setSeasonScope] = useState("");
   const [countrySort, setCountrySort] = useState<{ key: CountrySortKey; direction: SortDirection }>({ key: "unique_pilots", direction: "desc" });
   const [quadSort, setQuadSort] = useState<{ key: QuadSortKey; direction: SortDirection }>({ key: "entries", direction: "desc" });
@@ -88,6 +89,13 @@ export function GeneralStatsPage() {
   const [consistencySort, setConsistencySort] = useState<{ key: ConsistencySortKey; direction: SortDirection }>({ key: "consistency_score", direction: "desc" });
   const [improvementSort, setImprovementSort] = useState<{ key: ImprovementSortKey; direction: SortDirection }>({ key: "improvement_score", direction: "desc" });
 
+  useEffect(() => {
+    const params = new URLSearchParams({ class: raceClass, pilot: selectedPilot, section });
+    if (dateFrom) params.set("from", dateFrom);
+    if (dateTo) params.set("to", dateTo);
+    if (consistentPilotsOnly) params.set("consistent", "true");
+    if (params.toString() !== searchParams.toString()) setSearchParams(params, { replace: true });
+  }, [consistentPilotsOnly, dateFrom, dateTo, raceClass, searchParams, section, selectedPilot, setSearchParams]);
   const stats = useApi<GeneralStatsResponse>(
     () => fetchJson(buildGeneralStatsPath(raceClass, dateFrom, dateTo, selectedPilot, consistentPilotsOnly)),
     [raceClass, dateFrom, dateTo, selectedPilot, consistentPilotsOnly],
@@ -293,6 +301,7 @@ export function GeneralStatsPage() {
         }, {});
         const selected = easyDays.selected_day;
         const decision = selected?.is_favorable === true ? "Favorable: fly" : selected?.is_favorable === false ? "Tough day: consider skipping" : "No completed results";
+        const generalReturnPath = `/general-stats?${new URLSearchParams({ class: raceClass, pilot: selectedPilot, section, ...(dateFrom ? { from: dateFrom } : {}), ...(dateTo ? { to: dateTo } : {}), ...(consistentPilotsOnly ? { consistent: "true" } : {}) }).toString()}`;
         return <div className="stack">
           <section className="panel">
             <div className="panel-header">
@@ -313,7 +322,7 @@ export function GeneralStatsPage() {
             <div className="panel-header"><div><p className="eyebrow">Daily leader-gap calendar</p><h2>Lower gap means an easier field</h2></div></div>
             <div className="comparison-calendar-list">{Object.entries(months).sort(([left], [right]) => right.localeCompare(left)).map(([month, days]) => {
               const blanks = new Date(`${month}-01T00:00:00`).getDay();
-              return <section className="comparison-month" key={month}><h3>{new Date(`${month}-01T00:00:00`).toLocaleDateString(undefined, { month: "long", year: "numeric" })}</h3><div className="comparison-weekdays">{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((label) => <span key={label}>{label}</span>)}</div><div className="comparison-calendar">{Array.from({ length: blanks }, (_, index) => <span className="comparison-day blank" key={`blank-${index}`} />)}{days.map((day) => <Link to={`/${raceClass}?date=${day.date}&pilot=${encodeURIComponent(selectedPilot)}`} className={`comparison-day comparison-day-link easy-day ${day.is_favorable ? "favorable" : "tough"}`} key={day.date} title={`${day.date}: ${day.average_gap_to_leader ?? "no data"} s average gap`}><small>{day.date.slice(8)}</small><strong>{day.average_gap_to_leader ?? "-"}{day.average_gap_to_leader !== null ? " s" : ""}</strong><em>{day.average_gap_percentage ?? "-"}{day.average_gap_percentage !== null ? "%" : ""} avg gap</em><em>{day.participant_count} pilots</em></Link>)}</div></section>;
+              return <section className="comparison-month" key={month}><h3>{new Date(`${month}-01T00:00:00`).toLocaleDateString(undefined, { month: "long", year: "numeric" })}</h3><div className="comparison-weekdays">{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((label) => <span key={label}>{label}</span>)}</div><div className="comparison-calendar">{Array.from({ length: blanks }, (_, index) => <span className="comparison-day blank" key={`blank-${index}`} />)}{days.map((day) => <Link to={`/${raceClass}?date=${day.date}&pilot=${encodeURIComponent(selectedPilot)}&general_return=${encodeURIComponent(generalReturnPath)}`} className={`comparison-day comparison-day-link easy-day ${day.is_favorable ? "favorable" : "tough"}`} key={day.date} title={`${day.date}: ${day.average_gap_to_leader ?? "no data"} s average gap`}><small>{day.date.slice(8)}</small><strong>{day.average_gap_to_leader ?? "-"}{day.average_gap_to_leader !== null ? " s" : ""}</strong><em>{day.average_gap_percentage ?? "-"}{day.average_gap_percentage !== null ? "%" : ""} avg gap</em><em>{day.participant_count} pilots</em></Link>)}</div></section>;
             })}</div>
             <p className="chart-note">Green squares are favorable; red squares are above the period average. Each square shows the field’s average seconds behind the day’s leader.</p>
           </section>

@@ -386,7 +386,7 @@ class AnalyticsService:
         percentage_values = [row["average_gap_percentage"] for row in daily_gaps if row["average_gap_percentage"] is not None]
         period_average_percentage = round(sum(percentage_values) / len(percentage_values), 3) if percentage_values else None
         for row in daily_gaps:
-            row["is_favorable"] = row["average_gap_to_leader"] < period_average if row["average_gap_to_leader"] is not None and period_average is not None else None
+            row["is_favorable"] = row["average_gap_percentage"] < period_average_percentage if row["average_gap_percentage"] is not None and period_average_percentage is not None else None
         target_date = selected_date or (day_specs[-1].date if day_specs else None)
         selected_day = next((row for row in daily_gaps if row["date"] == target_date), None)
         return {"consistent_pilots_only": consistent_pilots_only, "regular_pilot_threshold": threshold, "eligible_pilot_count": len(eligible_pilots), "period_average_gap_to_leader": period_average, "period_average_gap_percentage": period_average_percentage, "selected_day": selected_day, "favorable_days": sum(1 for row in daily_gaps if row["is_favorable"]), "daily_gaps": daily_gaps}
