@@ -57,9 +57,15 @@ class BattleScraperService:
         for race_class in ("open", "whoop"):
             self.sync_day(target_date=target_date, race_class=race_class)
 
-    def sync_historical(self, *, end_date: date | None = None, skip_existing: bool = True) -> None:
+    def sync_historical(
+        self,
+        *,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        skip_existing: bool = True,
+    ) -> None:
         final_date = end_date or datetime.now(timezone.utc).date()
-        current = settings.historical_start_date
+        current = start_date or settings.historical_start_date
         self._logger.info(
             "Starting historical sync from %s to %s (skip_existing=%s)",
             current.isoformat(),

@@ -19,6 +19,7 @@ def _build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     historical = subparsers.add_parser("sync-historical", help="Backfill historical results.")
+    historical.add_argument("--start-date", type=_parse_date, default=None, help="Inclusive start date in YYYY-MM-DD format.")
     historical.add_argument("--end-date", type=_parse_date, default=None, help="Inclusive end date in YYYY-MM-DD format.")
     historical.add_argument(
         "--skip-existing",
@@ -51,7 +52,7 @@ def main() -> None:
     service = BattleScraperService()
     try:
         if args.command == "sync-historical":
-            service.sync_historical(end_date=args.end_date, skip_existing=args.skip_existing)
+            service.sync_historical(start_date=args.start_date, end_date=args.end_date, skip_existing=args.skip_existing)
         elif args.command == "sync-current":
             service.sync_current_window()
         elif args.command == "sync-day":
