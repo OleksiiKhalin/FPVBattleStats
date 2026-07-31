@@ -12,7 +12,7 @@ type PilotContextValue = {
 const PilotContext = createContext<PilotContextValue | null>(null);
 
 export function PilotProvider({ children }: { children: React.ReactNode }) {
-  const [selectedPilot, setSelectedPilot] = useState("MGescapades");
+  const [selectedPilot, setSelectedPilot] = useState("ol_ek");
   const [pilotOptions, setPilotOptions] = useState<PilotOption[]>([]);
 
   return (
