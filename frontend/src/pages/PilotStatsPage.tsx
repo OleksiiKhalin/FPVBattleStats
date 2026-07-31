@@ -58,7 +58,7 @@ export function PilotStatsPage() {
   const [dateTo, setDateTo] = useState(searchParams.get("to") ?? sessionStorage.getItem("fpvbattle-pilot-to") ?? DEFAULT_TO);
   const [section, setSection] = useState<PilotSection>((searchParams.get("section") as PilotSection | null) ?? (sessionStorage.getItem("fpvbattle-pilot-section") as PilotSection | null) ?? "leader-gap");
   const [streakThreshold, setStreakThreshold] = useState(3);
-  const [comparisonOpponent, setComparisonOpponent] = useState(searchParams.get("opponent") ?? sessionStorage.getItem("fpvbattle-comparison-opponent") ?? "");
+  const [comparisonOpponent, setComparisonOpponent] = useState(searchParams.get("opponent") ?? "Jaxon");
   const [showLeaderAverage, setShowLeaderAverage] = useState(true);
   const [showFieldAverage, setShowFieldAverage] = useState(true);
   const [showEverydayGap, setShowEverydayGap] = useState(true);

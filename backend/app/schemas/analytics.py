@@ -96,6 +96,13 @@ class PilotHoverCardResponse(BaseModel):
     target_date: date
     skipped_days: int
     appearances: int
+    average_place: float | None = None
+    season_points: int | None = None
+    season_wins: int
+    season_win_rate: float | None = None
+    shared_days_with_viewpoint: int
+    wins_against_viewpoint: int
+    win_rate_against_viewpoint: float | None = None
     timeline: list[PilotHoverTimelinePoint]
 
 
@@ -151,6 +158,7 @@ class ParticipationStats(BaseModel):
 class EasyDayRow(BaseModel):
     date: date
     average_gap_to_leader: float | None = None
+    average_gap_percentage: float | None = None
     participant_count: int
     is_favorable: bool | None = None
 
@@ -160,6 +168,7 @@ class EasyDaysStats(BaseModel):
     regular_pilot_threshold: int
     eligible_pilot_count: int
     period_average_gap_to_leader: float | None = None
+    period_average_gap_percentage: float | None = None
     selected_day: EasyDayRow | None = None
     favorable_days: int
     daily_gaps: list[EasyDayRow]

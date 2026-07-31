@@ -44,7 +44,7 @@ export function ScoreboardTable({ data, selectedDate }: Props) {
     setHoverState({ pilot, x, y, data: null });
     try {
       const payload = await fetchJson<PilotHoverCardResponse>(
-        `/analytics/pilot-hover/${data.race_class}/${encodeURIComponent(pilot)}?target_date=${selectedDate}`,
+        `/analytics/pilot-hover/${data.race_class}/${encodeURIComponent(pilot)}?target_date=${selectedDate}&viewpoint_pilot=${encodeURIComponent(selectedPilot)}`,
       );
       setHoverState((current) => (current && current.pilot === pilot ? { ...current, data: payload } : current));
     } catch {

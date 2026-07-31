@@ -70,6 +70,13 @@ export type PilotHoverCardResponse = {
   target_date: string;
   skipped_days: number;
   appearances: number;
+  average_place: number | null;
+  season_points: number | null;
+  season_wins: number;
+  season_win_rate: number | null;
+  shared_days_with_viewpoint: number;
+  wins_against_viewpoint: number;
+  win_rate_against_viewpoint: number | null;
   timeline: PilotHoverTimelinePoint[];
 };
 
@@ -117,6 +124,7 @@ export type ParticipationDayRow = {
 export type EasyDayRow = {
   date: string;
   average_gap_to_leader: number | null;
+  average_gap_percentage: number | null;
   participant_count: number;
   is_favorable: boolean | null;
 };
@@ -154,6 +162,7 @@ export type GeneralStatsResponse = {
     regular_pilot_threshold: number;
     eligible_pilot_count: number;
     period_average_gap_to_leader: number | null;
+    period_average_gap_percentage: number | null;
     selected_day: EasyDayRow | null;
     favorable_days: number;
     daily_gaps: EasyDayRow[];

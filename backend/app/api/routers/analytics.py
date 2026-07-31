@@ -70,12 +70,14 @@ def get_pilot_hover_card(
     race_class: str,
     pilot_name: str,
     target_date: date = Query(...),
+    viewpoint_pilot: str | None = Query(default=None),
     session: Session = Depends(get_session),
 ) -> PilotHoverCardResponse:
     payload = AnalyticsService(session).get_pilot_hover_card(
         pilot_name=pilot_name,
         race_class=race_class,
         target_date=target_date,
+        viewpoint_pilot=viewpoint_pilot,
     )
     return PilotHoverCardResponse.model_validate(payload)
 

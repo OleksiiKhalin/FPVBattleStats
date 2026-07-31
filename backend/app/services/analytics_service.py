@@ -235,15 +235,18 @@ class AnalyticsService:
             previous = race_date
         return longest
 
-    def get_pilot_hover_card(self, *, pilot_name: str, race_class: str, target_date: date) -> dict:
+    def get_pilot_hover_card(
+        self,
+        *,
+        pilot_name: str,
+        race_class: str,
+        target_date: date,
+        viewpoint_pilot: str | None = None,
+    ) -> dict:
         target_day = self.session.execute(
             select(DaySpecModel).where(DaySpecModel.race_class == race_class, DaySpecModel.date == target_date),
         ).scalar_one_or_none()
-        if target_day is None:
-            season = target_date.strftime("%Y-%m")
-        else:
-            season = target_day.season
-
+        season = target_day.season if target_day is not None else target_date.strftime("%Y-%m")
         season_days = self.session.execute(
             select(DaySpecModel).where(
                 DaySpecModel.race_class == race_class,
@@ -251,50 +254,52 @@ class AnalyticsService:
                 DaySpecModel.date <= target_date,
             ).order_by(DaySpecModel.date),
         ).scalars().all()
-
+        empty_stats = {
+            "skipped_days": 0, "appearances": 0, "average_place": None, "season_points": None,
+            "season_wins": 0, "season_win_rate": None, "shared_days_with_viewpoint": 0,
+            "wins_against_viewpoint": 0, "win_rate_against_viewpoint": None, "timeline": [],
+        }
         if not season_days:
-            return {
-                "pilot": pilot_name,
-                "race_class": race_class,
-                "season": season,
-                "target_date": target_date,
-                "skipped_days": 0,
-                "appearances": 0,
-                "timeline": [],
-            }
+            return {"pilot": pilot_name, "race_class": race_class, "season": season, "target_date": target_date, **empty_stats}
 
-        pilot_rows = self.session.execute(
-            select(DaySpecModel.date, ResultModel.place)
-            .join(ResultModel, ResultModel.day_spec_ref == DaySpecModel.id)
-            .join(PilotModel, PilotModel.id == ResultModel.pilot_ref)
-            .where(
-                DaySpecModel.race_class == race_class,
-                DaySpecModel.season == season,
-                DaySpecModel.date <= target_date,
-                PilotModel.pilot == pilot_name,
-            )
-            .order_by(DaySpecModel.date),
-        ).all()
-        place_by_date = {race_date: place for race_date, place in pilot_rows}
-        timeline = []
-        skipped_days = 0
+        results_by_day = self._results_by_day([day.id for day in season_days])
+        timeline: list[dict] = []
         appearances = 0
+        skipped_days = 0
+        places: list[int] = []
+        season_wins = 0
+        shared_days = 0
+        wins_against_viewpoint = 0
+        fallback_points = 0
         for day in season_days:
-            place = place_by_date.get(day.date)
-            participated = place is not None
+            rows = results_by_day.get(day.id, [])
+            pilot_row = next((row for row in rows if row["pilot"] == pilot_name), None)
+            participated = pilot_row is not None
             if participated:
                 appearances += 1
+                if pilot_row["place"] is not None:
+                    places.append(pilot_row["place"])
+                if pilot_row["points"] is not None:
+                    fallback_points += pilot_row["points"]
+                timed_rows = [row for row in rows if row["time"] is not None]
+                if pilot_row["time"] is not None and timed_rows and pilot_row["time"] == min(row["time"] for row in timed_rows):
+                    season_wins += 1
+                viewpoint_row = next((row for row in rows if row["pilot"] == viewpoint_pilot), None)
+                if viewpoint_pilot and viewpoint_pilot != pilot_name and pilot_row["time"] is not None and viewpoint_row and viewpoint_row["time"] is not None:
+                    shared_days += 1
+                    if pilot_row["time"] < viewpoint_row["time"]:
+                        wins_against_viewpoint += 1
             else:
                 skipped_days += 1
-            timeline.append(
-                {
-                    "date": day.date,
-                    "participated": participated,
-                    "place": place,
-                    "skipped": 0 if participated else 1,
-                },
-            )
+            timeline.append({"date": day.date, "participated": participated, "place": pilot_row["place"] if pilot_row else None, "skipped": 0 if participated else 1})
 
+        season_points = None
+        if target_day is not None:
+            season_points = self.session.execute(
+                select(SeasonLeaderboardModel.points)
+                .join(PilotModel, PilotModel.id == SeasonLeaderboardModel.pilot_ref)
+                .where(SeasonLeaderboardModel.day_spec_ref == target_day.id, PilotModel.pilot == pilot_name),
+            ).scalar_one_or_none()
         return {
             "pilot": pilot_name,
             "race_class": race_class,
@@ -302,9 +307,15 @@ class AnalyticsService:
             "target_date": target_date,
             "skipped_days": skipped_days,
             "appearances": appearances,
+            "average_place": round(sum(places) / len(places), 2) if places else None,
+            "season_points": season_points if season_points is not None else fallback_points,
+            "season_wins": season_wins,
+            "season_win_rate": round((season_wins / appearances) * 100, 2) if appearances else None,
+            "shared_days_with_viewpoint": shared_days,
+            "wins_against_viewpoint": wins_against_viewpoint,
+            "win_rate_against_viewpoint": round((wins_against_viewpoint / shared_days) * 100, 2) if shared_days else None,
             "timeline": timeline,
         }
-
     def get_general_stats(
         self,
         *,
@@ -368,14 +379,17 @@ class AnalyticsService:
             leader_time = min((row["time"] for row in timed_rows), default=None)
             population = [row for row in timed_rows if not consistent_pilots_only or row["pilot"] in eligible_pilots]
             average_gap = round(sum(row["time"] - leader_time for row in population) / len(population), 3) if leader_time is not None and population else None
-            daily_gaps.append({"date": day_spec.date, "average_gap_to_leader": average_gap, "participant_count": len(population)})
+            average_gap_percentage = round(sum(((row["time"] - leader_time) / leader_time) * 100 for row in population) / len(population), 3) if leader_time not in (None, 0) and population else None
+            daily_gaps.append({"date": day_spec.date, "average_gap_to_leader": average_gap, "average_gap_percentage": average_gap_percentage, "participant_count": len(population)})
         average_values = [row["average_gap_to_leader"] for row in daily_gaps if row["average_gap_to_leader"] is not None]
         period_average = round(sum(average_values) / len(average_values), 3) if average_values else None
+        percentage_values = [row["average_gap_percentage"] for row in daily_gaps if row["average_gap_percentage"] is not None]
+        period_average_percentage = round(sum(percentage_values) / len(percentage_values), 3) if percentage_values else None
         for row in daily_gaps:
             row["is_favorable"] = row["average_gap_to_leader"] < period_average if row["average_gap_to_leader"] is not None and period_average is not None else None
         target_date = selected_date or (day_specs[-1].date if day_specs else None)
         selected_day = next((row for row in daily_gaps if row["date"] == target_date), None)
-        return {"consistent_pilots_only": consistent_pilots_only, "regular_pilot_threshold": threshold, "eligible_pilot_count": len(eligible_pilots), "period_average_gap_to_leader": period_average, "selected_day": selected_day, "favorable_days": sum(1 for row in daily_gaps if row["is_favorable"]), "daily_gaps": daily_gaps}
+        return {"consistent_pilots_only": consistent_pilots_only, "regular_pilot_threshold": threshold, "eligible_pilot_count": len(eligible_pilots), "period_average_gap_to_leader": period_average, "period_average_gap_percentage": period_average_percentage, "selected_day": selected_day, "favorable_days": sum(1 for row in daily_gaps if row["is_favorable"]), "daily_gaps": daily_gaps}
     def _get_day_specs(self, *, race_class: str, date_from: date | None, date_to: date | None) -> list[DaySpecModel]:
         statement = select(DaySpecModel).where(DaySpecModel.race_class == race_class)
         if date_from is not None:

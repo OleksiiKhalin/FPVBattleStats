@@ -1,5 +1,6 @@
 import { Bar, BarChart, Brush, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { fetchJson } from "../api/client";
 import type {
@@ -79,6 +80,7 @@ export function GeneralStatsPage() {
   const [dateTo, setDateTo] = useState(DEFAULT_TO);
   const [section, setSection] = useState<GeneralSection>("countries");
   const [consistentPilotsOnly, setConsistentPilotsOnly] = useState(false);
+  const [seasonScope, setSeasonScope] = useState("");
   const [countrySort, setCountrySort] = useState<{ key: CountrySortKey; direction: SortDirection }>({ key: "unique_pilots", direction: "desc" });
   const [quadSort, setQuadSort] = useState<{ key: QuadSortKey; direction: SortDirection }>({ key: "entries", direction: "desc" });
   const [trackSort, setTrackSort] = useState<{ key: TrackSortKey; direction: SortDirection }>({ key: "weighted_score", direction: "desc" });
@@ -141,8 +143,17 @@ export function GeneralStatsPage() {
         </div>
 
         <RangeQuickFilters
-          onApply={(from, to) => { setDateFrom(from); setDateTo(to); }}
-          onClear={() => { setDateFrom(""); setDateTo(""); }}
+          onApply={(from, to) => { setDateFrom(from); setDateTo(to); setSeasonScope(""); }}
+          onClear={() => { setDateFrom(""); setDateTo(""); setSeasonScope(""); }}
+          seasons={stats.data?.seasons.map((row) => row.season) ?? []}
+          season={seasonScope}
+          onSeasonChange={(value) => {
+            setSeasonScope(value);
+            if (!value) { setDateFrom(""); setDateTo(""); return; }
+            const [year, month] = value.split("-").map(Number);
+            setDateFrom(`${value}-01`);
+            setDateTo(new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10));
+          }}
         />
 
         <div className="section-tabs">
@@ -289,18 +300,18 @@ export function GeneralStatsPage() {
               <label className="toggle-row"><input type="checkbox" checked={consistentPilotsOnly} onChange={(event) => setConsistentPilotsOnly(event.target.checked)} /> Regular pilots only</label>
             </div>
             <div className="stat-grid">
-              <div className="stat-card"><span>Selected-day decision</span><strong>{decision}</strong></div>
-              <div className="stat-card"><span>Selected-day avg gap</span><strong>{selected?.average_gap_to_leader ?? "-"}{selected?.average_gap_to_leader !== null && selected?.average_gap_to_leader !== undefined ? " s" : ""}</strong></div>
-              <div className="stat-card"><span>Period avg gap</span><strong>{easyDays.period_average_gap_to_leader ?? "-"}{easyDays.period_average_gap_to_leader !== null ? " s" : ""}</strong></div>
-              <div className="stat-card"><span>Favorable days</span><strong>{easyDays.favorable_days}</strong></div>
+              <div className="stat-card"><span>Today average gap</span><strong>{selected?.average_gap_percentage ?? "-"}{selected?.average_gap_percentage !== null && selected?.average_gap_percentage !== undefined ? "%" : ""}</strong></div>
+              <div className="stat-card"><span>Period average gap</span><strong>{easyDays.period_average_gap_percentage ?? "-"}{easyDays.period_average_gap_percentage !== null ? "%" : ""}</strong></div>
+              <div className="stat-card"><span>Today decision</span><strong>{decision}</strong></div>
+              <div className="stat-card"><span>Favorable days</span><strong>{easyDays.favorable_days} / {easyDays.daily_gaps.length}</strong></div>
             </div>
             <p className="chart-note">A favorable day has a lower average gap to that day’s fastest pilot than the selected period’s daily average. {consistentPilotsOnly ? `Only pilots active on at least ${easyDays.regular_pilot_threshold} tracked days are averaged (${easyDays.eligible_pilot_count} eligible).` : "All pilots with a recorded time are averaged."}</p>
           </section>
           <section className="panel">
             <div className="panel-header"><div><p className="eyebrow">Daily leader-gap calendar</p><h2>Lower gap means an easier field</h2></div></div>
-            <div className="comparison-calendar-list">{Object.entries(months).map(([month, days]) => {
+            <div className="comparison-calendar-list">{Object.entries(months).sort(([left], [right]) => right.localeCompare(left)).map(([month, days]) => {
               const blanks = new Date(`${month}-01T00:00:00`).getDay();
-              return <section className="comparison-month" key={month}><h3>{new Date(`${month}-01T00:00:00`).toLocaleDateString(undefined, { month: "long", year: "numeric" })}</h3><div className="comparison-weekdays">{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((label) => <span key={label}>{label}</span>)}</div><div className="comparison-calendar">{Array.from({ length: blanks }, (_, index) => <span className="comparison-day blank" key={`blank-${index}`} />)}{days.map((day) => <div className={`comparison-day easy-day ${day.is_favorable ? "favorable" : "tough"}`} key={day.date} title={`${day.date}: ${day.average_gap_to_leader ?? "no data"} s average gap`}><small>{day.date.slice(8)}</small><strong>{day.average_gap_to_leader ?? "-"}{day.average_gap_to_leader !== null ? " s" : ""}</strong><em>{day.participant_count} pilots</em></div>)}</div></section>;
+              return <section className="comparison-month" key={month}><h3>{new Date(`${month}-01T00:00:00`).toLocaleDateString(undefined, { month: "long", year: "numeric" })}</h3><div className="comparison-weekdays">{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((label) => <span key={label}>{label}</span>)}</div><div className="comparison-calendar">{Array.from({ length: blanks }, (_, index) => <span className="comparison-day blank" key={`blank-${index}`} />)}{days.map((day) => <Link to={`/${raceClass}?date=${day.date}&pilot=${encodeURIComponent(selectedPilot)}`} className={`comparison-day comparison-day-link easy-day ${day.is_favorable ? "favorable" : "tough"}`} key={day.date} title={`${day.date}: ${day.average_gap_to_leader ?? "no data"} s average gap`}><small>{day.date.slice(8)}</small><strong>{day.average_gap_to_leader ?? "-"}{day.average_gap_to_leader !== null ? " s" : ""}</strong><em>{day.participant_count} pilots</em></Link>)}</div></section>;
             })}</div>
             <p className="chart-note">Green squares are favorable; red squares are above the period average. Each square shows the field’s average seconds behind the day’s leader.</p>
           </section>
