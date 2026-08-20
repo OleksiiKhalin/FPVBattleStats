@@ -5,6 +5,8 @@ from datetime import date
 
 from ..logging import configure_logging
 from ..services.scraper import BattleScraperService
+from backend.app.db.bootstrap import SessionFactory
+from backend.app.services.global_leaderboard_service import GlobalLeaderboardService
 
 
 def _parse_date(value: str) -> date:
@@ -41,6 +43,10 @@ def _build_parser() -> argparse.ArgumentParser:
     sync_day.add_argument("target_date", type=_parse_date, help="Target date in YYYY-MM-DD format.")
     sync_day.add_argument("--class", dest="race_class", choices=["open", "whoop"], default="open")
 
+    leaderboard = subparsers.add_parser("recalculate-global-leaderboard", help="Persist Global Leaderboard snapshots.")
+    leaderboard.add_argument("--date", dest="snapshot_date", type=_parse_date, default=None)
+    leaderboard.add_argument("--class", dest="race_class", choices=["open", "whoop", "all"], default="all")
+
     return parser
 
 
@@ -57,6 +63,18 @@ def main() -> None:
             service.sync_current_window()
         elif args.command == "sync-day":
             service.sync_day(target_date=args.target_date, race_class=args.race_class)
+        elif args.command == "recalculate-global-leaderboard":
+            session = SessionFactory()
+            try:
+                race_classes = ["open", "whoop"] if args.race_class == "all" else [args.race_class]
+                for race_class in race_classes:
+                    GlobalLeaderboardService(session).create_snapshot(
+                        race_class=race_class,
+                        snapshot_date=args.snapshot_date,
+                    )
+                session.commit()
+            finally:
+                session.close()
         else:
             parser.error(f"Unknown command: {args.command}")
     finally:

@@ -201,3 +201,56 @@ class GeneralStatsResponse(BaseModel):
     selected_pilot_consistency: ConsistencyRow | None = None
     consistency_leaderboard: list[ConsistencyRow]
     best_improvement: list[ConsistencyRow]
+
+
+class GlobalLeaderboardForecast(BaseModel):
+    checkpoint_date: date
+    no_flight_days: int
+    continue_flight_days: int
+    no_flight_adjusted_average_gap: float | None = None
+    continue_adjusted_average_gap: float | None = None
+    no_flight_rank: int | None = None
+    no_flight_league: str | None = None
+    continue_rank: int | None = None
+    continue_league: str | None = None
+    days_needed_to_qualify: int
+    can_qualify_if_active: bool
+
+
+class GlobalLeaderboardRow(BaseModel):
+    pilot: str
+    country: str | None = None
+    rank: int | None = None
+    league: str | None = None
+    status: str
+    status_reason: str
+    flight_days: int
+    scored_days: int
+    last_flight_date: date | None = None
+    inactive_days: int
+    adjusted_average_gap: float | None = None
+    worst_day_gap: float | None = None
+    target_league: str | None = None
+    gap_to_next_league: float | None = None
+    required_flight_days: int
+    rank_delta: int | None = None
+    league_delta: str | None = None
+    forecast_weekly: GlobalLeaderboardForecast
+    forecast_monthly: GlobalLeaderboardForecast
+
+
+class GlobalLeaderboardResponse(BaseModel):
+    race_class: str
+    as_of_date: date
+    window_from: date
+    window_to: date
+    last_official_snapshot_date: date | None = None
+    last_official_snapshot_kind: str | None = None
+    next_weekly_checkpoint: date
+    next_month_start: date
+    minimum_flight_days: int
+    window_days: int
+    gold_places: int
+    silver_places: int
+    selected_pilot: GlobalLeaderboardRow | None = None
+    rows: list[GlobalLeaderboardRow]

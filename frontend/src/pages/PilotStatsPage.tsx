@@ -3,14 +3,15 @@ import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { fetchJson } from "../api/client";
-import type { GeneralStatsResponse, PilotStatsResponse, PilotTimelinePoint } from "../api/types";
+import type { GeneralStatsResponse, GlobalLeaderboardResponse, PilotStatsResponse, PilotTimelinePoint } from "../api/types";
+import { GlobalLeaderboardPanel } from "../components/GlobalLeaderboardPanel";
 import { PilotComparisonPanel } from "../components/PilotComparisonPanel";
 import { RangeQuickFilters } from "../components/RangeQuickFilters";
 import { StreakBoard } from "../components/StreakBoard";
 import { usePilot } from "../context/PilotContext";
 import { useApi } from "../hooks/useApi";
 
-type PilotSection = "leader-gap" | "logarithmic" | "time-comparison" | "streaks" | "compare";
+type PilotSection = "global-leaderboard" | "leader-gap" | "logarithmic" | "time-comparison" | "streaks" | "compare";
 
 const DEFAULT_FROM = "2023-11-15";
 const DEFAULT_TO = new Date().toISOString().slice(0, 10);
@@ -94,6 +95,10 @@ export function PilotStatsPage() {
   }, [dateFrom, dateTo, raceClass, section]);
 
   const seasonStats = useApi<GeneralStatsResponse>(() => fetchJson(`/analytics/general-stats/${raceClass}`), [raceClass]);
+  const globalLeaderboard = useApi<GlobalLeaderboardResponse>(
+    () => fetchJson(`/analytics/global-leaderboard/${raceClass}?pilot_name=${encodeURIComponent(selectedPilot)}`),
+    [raceClass, selectedPilot],
+  );
 
   const stats = useApi<PilotStatsResponse>(
     () => fetchJson(buildPilotStatsPath(raceClass, selectedPilot, dateFrom, dateTo, streakThreshold)),
@@ -101,6 +106,7 @@ export function PilotStatsPage() {
   );
 
   const sectionLabel = {
+    "global-leaderboard": "Global Leaderboard",
     "leader-gap": "Leader Gap",
     logarithmic: "Logarithmic View",
     "time-comparison": "Time Comparison",
@@ -198,6 +204,9 @@ export function PilotStatsPage() {
 
       {stats.loading ? <div className="panel">Loading pilot stats...</div> : null}
       {stats.error ? <div className="panel">Pilot stats unavailable: {stats.error}</div> : null}
+      {section === "global-leaderboard" && globalLeaderboard.loading ? <div className="panel">Loading Global Leaderboard...</div> : null}
+      {section === "global-leaderboard" && globalLeaderboard.error ? <div className="panel">Global Leaderboard unavailable: {globalLeaderboard.error}</div> : null}
+      {globalLeaderboard.data && section === "global-leaderboard" ? <GlobalLeaderboardPanel data={globalLeaderboard.data} selectedPilot={selectedPilot} /> : null}
 
       {stats.data && section === "leader-gap" ? (
         <section className="panel chart-panel">

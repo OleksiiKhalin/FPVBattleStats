@@ -6,14 +6,31 @@ from sqlalchemy.orm import Session
 from ..dependencies import get_session
 from ...schemas.analytics import (
     GeneralStatsResponse,
+    GlobalLeaderboardResponse,
     PilotComparisonResponse,
     PilotHoverCardResponse,
     PilotOption,
     PilotStatsResponse,
 )
 from ...services.analytics_service import AnalyticsService
+from ...services.global_leaderboard_service import GlobalLeaderboardService
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
+
+
+@router.get("/global-leaderboard/{race_class}", response_model=GlobalLeaderboardResponse)
+def get_global_leaderboard(
+    race_class: str,
+    as_of_date: date | None = Query(default=None),
+    pilot_name: str | None = Query(default=None),
+    session: Session = Depends(get_session),
+) -> GlobalLeaderboardResponse:
+    payload = GlobalLeaderboardService(session).get_global_leaderboard(
+        race_class=race_class,
+        as_of_date=as_of_date,
+        selected_pilot=pilot_name,
+    )
+    return GlobalLeaderboardResponse.model_validate(payload)
 
 
 @router.get("/pilots", response_model=list[PilotOption])

@@ -37,6 +37,7 @@ class PilotModel(Base):
 
     results: Mapped[list["ResultModel"]] = relationship(back_populates="pilot")
     season_rows: Mapped[list["SeasonLeaderboardModel"]] = relationship(back_populates="pilot")
+    global_leaderboard_rows: Mapped[list["GlobalLeaderboardRowModel"]] = relationship(back_populates="pilot")
 
 
 class ResultModel(Base):
@@ -70,3 +71,43 @@ class SeasonLeaderboardModel(Base):
     day_spec: Mapped["DaySpecModel"] = relationship(back_populates="season_leaderboard")
     pilot: Mapped["PilotModel"] = relationship(back_populates="season_rows")
 
+
+class GlobalLeaderboardSnapshotModel(Base):
+    __tablename__ = "global_leaderboard_snapshots"
+    __table_args__ = (UniqueConstraint("race_class", "snapshot_date", name="uq_global_snapshot_class_date"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    race_class: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    snapshot_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    window_from: Mapped[date] = mapped_column(Date, nullable=False)
+    window_to: Mapped[date] = mapped_column(Date, nullable=False)
+    calculation_kind: Mapped[str] = mapped_column(String(24), nullable=False, default="weekly")
+
+    rows: Mapped[list["GlobalLeaderboardRowModel"]] = relationship(
+        back_populates="snapshot",
+        cascade="all, delete-orphan",
+    )
+
+
+class GlobalLeaderboardRowModel(Base):
+    __tablename__ = "global_leaderboard_rows"
+    __table_args__ = (UniqueConstraint("snapshot_ref", "pilot_ref", name="uq_global_snapshot_pilot"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    snapshot_ref: Mapped[int] = mapped_column(
+        ForeignKey("global_leaderboard_snapshots.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    pilot_ref: Mapped[int] = mapped_column(ForeignKey("pilots.id", ondelete="CASCADE"), nullable=False, index=True)
+    rank: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    league: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    status: Mapped[str] = mapped_column(String(24), nullable=False)
+    flight_days: Mapped[int] = mapped_column(Integer, nullable=False)
+    scored_days: Mapped[int] = mapped_column(Integer, nullable=False)
+    last_flight_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    adjusted_average_gap: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    worst_day_gap: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
+    snapshot: Mapped["GlobalLeaderboardSnapshotModel"] = relationship(back_populates="rows")
+    pilot: Mapped["PilotModel"] = relationship(back_populates="global_leaderboard_rows")

@@ -443,6 +443,95 @@ h3 {
   font-size: 1.24rem;
 }
 
+.global-leaderboard-kpis {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.forecast-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.forecast-strip .toggle-row {
+  margin-top: 0;
+}
+
+.leaderboard-filters {
+  margin-top: 0;
+  align-items: center;
+}
+
+.leaderboard-filters label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.leaderboard-filters select {
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--panel-soft);
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.global-leaderboard-table {
+  min-width: 920px;
+}
+
+.global-leaderboard-table td:last-child {
+  min-width: 270px;
+}
+
+.table-muted,
+.table-reason {
+  display: block;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.table-reason {
+  max-width: 280px;
+  margin-top: 3px;
+  line-height: 1.25;
+}
+
+.league-pill,
+.status-pill {
+  display: inline-block;
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.league-gold { color: #151005; background: #ffe072; }
+.league-silver { color: #11151b; background: #c8d0dc; }
+.league-bronze { color: #1b0d05; background: #cf8a5a; }
+.league-candidate { color: var(--muted); background: var(--panel-soft); }
+.status-qualified { color: var(--accent); }
+.status-at_risk { color: #ffbd6b; }
+.status-candidate { color: #9fd7ff; }
+.status-guaranteed_out { color: #ff7d7d; }
+
+.status-pill {
+  border: 1px solid currentColor;
+}
+
 .streak-groups {
   display: grid;
   gap: 14px;
@@ -522,7 +611,8 @@ h3 {
 
 @media (max-width: 1080px) {
   .filters-grid,
-  .stat-grid {
+  .stat-grid,
+  .global-leaderboard-kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -551,8 +641,19 @@ h3 {
   }
 
   .filters-grid,
-  .stat-grid {
+  .stat-grid,
+  .global-leaderboard-kpis {
     grid-template-columns: 1fr;
+  }
+
+  .leaderboard-filters {
+    align-items: stretch;
+    display: grid;
+  }
+
+  .leaderboard-filters label,
+  .leaderboard-filters select {
+    width: 100%;
   }
 
   .scoreboard {

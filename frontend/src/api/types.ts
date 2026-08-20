@@ -173,6 +173,59 @@ export type GeneralStatsResponse = {
   best_improvement: ConsistencyRow[];
 };
 
+export type GlobalLeaderboardForecast = {
+  checkpoint_date: string;
+  no_flight_days: number;
+  continue_flight_days: number;
+  no_flight_adjusted_average_gap: number | null;
+  continue_adjusted_average_gap: number | null;
+  no_flight_rank: number | null;
+  no_flight_league: string | null;
+  continue_rank: number | null;
+  continue_league: string | null;
+  days_needed_to_qualify: number;
+  can_qualify_if_active: boolean;
+};
+
+export type GlobalLeaderboardRow = {
+  pilot: string;
+  country: string | null;
+  rank: number | null;
+  league: string | null;
+  status: "qualified" | "at_risk" | "guaranteed_out" | "candidate";
+  status_reason: string;
+  flight_days: number;
+  scored_days: number;
+  last_flight_date: string | null;
+  inactive_days: number;
+  adjusted_average_gap: number | null;
+  worst_day_gap: number | null;
+  target_league: string | null;
+  gap_to_next_league: number | null;
+  required_flight_days: number;
+  rank_delta: number | null;
+  league_delta: "up" | "down" | null;
+  forecast_weekly: GlobalLeaderboardForecast;
+  forecast_monthly: GlobalLeaderboardForecast;
+};
+
+export type GlobalLeaderboardResponse = {
+  race_class: string;
+  as_of_date: string;
+  window_from: string;
+  window_to: string;
+  last_official_snapshot_date: string | null;
+  last_official_snapshot_kind: string | null;
+  next_weekly_checkpoint: string;
+  next_month_start: string;
+  minimum_flight_days: number;
+  window_days: number;
+  gold_places: number;
+  silver_places: number;
+  selected_pilot: GlobalLeaderboardRow | null;
+  rows: GlobalLeaderboardRow[];
+};
+
 
 export type PilotComparisonPilotStats = {
   flights: number;

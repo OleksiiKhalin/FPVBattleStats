@@ -45,6 +45,7 @@ Scraper:
 python -m scraper.app.cli.main sync-historical
 python -m scraper.app.cli.main sync-current
 python -m scraper.app.cli.main sync-day 2026-07-02 --class open
+python -m scraper.app.cli.main recalculate-global-leaderboard --class all
 ```
 
 Frontend:
@@ -59,3 +60,5 @@ npm run dev
 - The scraper always trusts points and categories displayed on the website.
 - Historical days are treated as immutable after ingestion.
 - Schema changes are made by editing SQLAlchemy models directly; Alembic is intentionally not used.
+- Global Leaderboard snapshots should be recalculated weekly and on the first day of each month. Railway can run `railway/recalculate-global-leaderboard.sh` as a scheduled job.
+- The live Global Leaderboard is available at `/api/analytics/global-leaderboard/{race_class}` and accepts optional `as_of_date` and `pilot_name` query parameters.
