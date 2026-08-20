@@ -207,8 +207,8 @@ class GlobalLeaderboardForecast(BaseModel):
     checkpoint_date: date
     no_flight_days: int
     continue_flight_days: int
-    no_flight_adjusted_average_gap: float | None = None
-    continue_adjusted_average_gap: float | None = None
+    no_flight_adjusted_average_gap_percentage: float | None = None
+    continue_adjusted_average_gap_percentage: float | None = None
     no_flight_rank: int | None = None
     no_flight_league: str | None = None
     continue_rank: int | None = None
@@ -228,11 +228,22 @@ class GlobalLeaderboardRow(BaseModel):
     scored_days: int
     last_flight_date: date | None = None
     inactive_days: int
-    adjusted_average_gap: float | None = None
-    worst_day_gap: float | None = None
+    adjusted_average_gap_percentage: float | None = None
+    worst_day_gap_percentage: float | None = None
     target_league: str | None = None
-    gap_to_next_league: float | None = None
+    gap_to_next_league_percentage: float | None = None
     required_flight_days: int
+    days_needed_for_next_season: int
+    available_days_before_next_season: int
+    next_season_retained_days: int
+    can_pass_next_season: bool
+    season_start_rank: int | None = None
+    season_start_league: str | None = None
+    season_start_snapshot_date: date | None = None
+    projected_next_season_rank: int | None = None
+    projected_next_season_league: str | None = None
+    projected_next_season_eligible: bool
+    smart_sort_bucket: int
     rank_delta: int | None = None
     league_delta: str | None = None
     forecast_weekly: GlobalLeaderboardForecast
@@ -246,8 +257,10 @@ class GlobalLeaderboardResponse(BaseModel):
     window_to: date
     last_official_snapshot_date: date | None = None
     last_official_snapshot_kind: str | None = None
+    season_start_snapshot_date: date | None = None
     next_weekly_checkpoint: date
     next_month_start: date
+    season_end_date: date
     minimum_flight_days: int
     window_days: int
     gold_places: int

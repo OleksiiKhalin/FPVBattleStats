@@ -489,11 +489,15 @@ h3 {
 }
 
 .global-leaderboard-table {
-  min-width: 920px;
+  min-width: 1240px;
 }
 
 .global-leaderboard-table td:last-child {
   min-width: 270px;
+}
+
+.global-leaderboard-table td:nth-child(7) {
+  min-width: 92px;
 }
 
 .table-muted,

@@ -3,10 +3,12 @@ from pathlib import Path
 import sys
 
 from sqlalchemy import func, select
+import pytest
 
 sys.path.append(str(Path(__file__).resolve().parents[2] / "shared" / "python"))
 
 from backend.app.services.global_leaderboard_service import GlobalLeaderboardService
+from backend.app.schemas.analytics import GlobalLeaderboardResponse
 from fpvbattle_core.db.models import DaySpecModel, GlobalLeaderboardSnapshotModel, PilotModel, ResultModel
 from fpvbattle_core.db.session import create_db_engine, create_session_factory, init_db
 
@@ -72,10 +74,13 @@ def test_global_leaderboard_uses_30_day_window_top_three_and_worst_day_exclusion
     assert "Outside" not in rows
     assert rows["Target"]["flight_days"] == 15
     assert rows["Target"]["scored_days"] == 15
-    assert rows["Target"]["worst_day_gap"] == 100.0
-    assert rows["Target"]["adjusted_average_gap"] == 7.5
+    assert rows["Target"]["worst_day_gap_percentage"] == pytest.approx(909.091)
+    assert rows["Target"]["adjusted_average_gap_percentage"] == pytest.approx(68.182)
     assert rows["Target"]["status"] == "at_risk"
     assert rows["Target"]["inactive_days"] == 15
+    assert rows["Target"]["days_needed_for_next_season"] == 2
+    assert rows["Target"]["available_days_before_next_season"] == 1
+    assert rows["Target"]["can_pass_next_season"] is False
     assert rows["Leader A"]["rank"] == 1
 
     qualified = [row for row in payload["rows"] if row["rank"] is not None]
@@ -107,4 +112,56 @@ def test_global_leaderboard_snapshots_are_idempotent_and_classes_are_separate() 
     assert open_payload["last_official_snapshot_date"] == race_date
     assert [row["pilot"] for row in open_payload["rows"]] == ["Open Pilot"]
     assert [row["pilot"] for row in whoop_payload["rows"]] == ["Whoop Pilot"]
+    session.close()
+
+
+def test_projected_rank_includes_candidate_who_can_reach_next_season() -> None:
+    session = _build_session()
+    start = date(2026, 8, 1)
+    for offset in range(-5, 20):
+        race_date = start + timedelta(days=offset)
+        results = [("Leader A", 10.0), ("Leader B", 11.0), ("Leader C", 12.0)]
+        if offset < 15:
+            results.append(("Qualified", 20.0))
+        if offset >= 16:
+            results.append(("Candidate", 12.1))
+        _add_day(session, race_date, "open", results)
+    session.commit()
+
+    payload = GlobalLeaderboardService(session).get_global_leaderboard(
+        race_class="open",
+        as_of_date=date(2026, 8, 20),
+        selected_pilot="Candidate",
+    )
+    GlobalLeaderboardResponse.model_validate(payload)
+    candidate = payload["selected_pilot"]
+
+    assert candidate is not None
+    assert candidate["flight_days"] == 4
+    assert candidate["days_needed_for_next_season"] == 11
+    assert candidate["available_days_before_next_season"] == 11
+    assert candidate["can_pass_next_season"] is True
+    assert candidate["projected_next_season_rank"] is not None
+    assert candidate["projected_next_season_rank"] <= 25
+    assert candidate["status"] == "candidate"
+    assert candidate["smart_sort_bucket"] == 1
+    session.close()
+
+
+def test_season_start_rank_uses_first_available_snapshot_in_current_month() -> None:
+    session = _build_session()
+    start = date(2026, 8, 1)
+    for offset in range(-5, 20):
+        race_date = start + timedelta(days=offset)
+        _add_day(session, race_date, "open", [("Pilot A", 10.0), ("Pilot B", 11.0)])
+    session.commit()
+
+    service = GlobalLeaderboardService(session)
+    service.create_snapshot(race_class="open", snapshot_date=date(2026, 8, 10))
+    session.commit()
+    payload = service.get_global_leaderboard(race_class="open", as_of_date=date(2026, 8, 20), selected_pilot="Pilot A")
+
+    assert payload["season_start_snapshot_date"] == date(2026, 8, 10)
+    assert payload["selected_pilot"]["season_start_rank"] == 1
+    assert payload["selected_pilot"]["season_start_snapshot_date"] == date(2026, 8, 10)
     session.close()
