@@ -1,14 +1,33 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { GlobalLeaderboardResponse, GlobalLeaderboardRow } from "../api/types";
 
 type Props = {
   data: GlobalLeaderboardResponse;
   selectedPilot: string;
+  onDateChange: (value: string) => void;
+  onViewModeChange: (value: "current" | "probable") => void;
 };
 
 type ForecastMode = "weekly" | "monthly";
-type SortMode = "official" | "smart";
+type SortDirection = "asc" | "desc";
+type SortKey =
+  | "season_start_rank"
+  | "rank"
+  | "projected_next_season_rank"
+  | "pilot"
+  | "league"
+  | "flight_days"
+  | "days_needed_for_next_season"
+  | "inactive_days"
+  | "season_missed_days"
+  | "adjusted_average_gap_percentage"
+  | "current_gap_percentage"
+  | "rank_delta"
+  | "projected_next_season_league"
+  | "status";
+
+const leagueOrder: Record<string, number> = { gold: 1, silver: 2, bronze: 3, candidate: 4, unranked: 5 };
 
 function leagueLabel(league: string | null) {
   if (!league) return "Candidate";
@@ -16,43 +35,87 @@ function leagueLabel(league: string | null) {
 }
 
 function rankLabel(rank: number | null) {
-  return rank ? `#${rank}` : "—";
+  return rank ? `#${rank}` : "-";
 }
 
 function percentLabel(value: number | null) {
-  return value === null ? "—" : `${value.toFixed(2)}%`;
+  return value === null ? "-" : `${value.toFixed(2)}%`;
 }
 
 function deltaLabel(row: GlobalLeaderboardRow) {
-  if (row.rank_delta === null || row.rank_delta === 0) return "—";
-  return row.rank_delta > 0 ? `↑ ${row.rank_delta}` : `↓ ${Math.abs(row.rank_delta)}`;
+  if (row.rank_delta === null || row.rank_delta === 0) return "-";
+  return row.rank_delta > 0 ? `Up ${row.rank_delta}` : `Down ${Math.abs(row.rank_delta)}`;
 }
 
-function sortSmart(rows: GlobalLeaderboardRow[]) {
-  return [...rows].sort((left, right) => (
-    left.smart_sort_bucket - right.smart_sort_bucket
-    || left.days_needed_for_next_season - right.days_needed_for_next_season
-    || (left.projected_next_season_rank ?? Number.POSITIVE_INFINITY) - (right.projected_next_season_rank ?? Number.POSITIVE_INFINITY)
-    || (left.adjusted_average_gap_percentage ?? Number.POSITIVE_INFINITY) - (right.adjusted_average_gap_percentage ?? Number.POSITIVE_INFINITY)
-    || left.pilot.localeCompare(right.pilot)
-  ));
+function valueFor(row: GlobalLeaderboardRow, key: SortKey): string | number | null {
+  if (key === "league" || key === "projected_next_season_league") {
+    const value = key === "league" ? row.league : row.projected_next_season_league;
+    return value ? leagueOrder[value] ?? 99 : 99;
+  }
+  return row[key];
 }
 
-export function GlobalLeaderboardPanel({ data, selectedPilot }: Props) {
+function compareRows(left: GlobalLeaderboardRow, right: GlobalLeaderboardRow, key: SortKey, direction: SortDirection) {
+  const leftValue = valueFor(left, key);
+  const rightValue = valueFor(right, key);
+  if (leftValue === null && rightValue === null) return left.pilot.localeCompare(right.pilot);
+  if (leftValue === null) return 1;
+  if (rightValue === null) return -1;
+  const result = typeof leftValue === "string" && typeof rightValue === "string"
+    ? leftValue.localeCompare(rightValue)
+    : Number(leftValue) - Number(rightValue);
+  return (result || left.pilot.localeCompare(right.pilot)) * (direction === "asc" ? 1 : -1);
+}
+
+function leagueClass(league: string | null) {
+  return `league-pill league-${league ?? "candidate"}`;
+}
+
+export function GlobalLeaderboardPanel({ data, selectedPilot, onDateChange, onViewModeChange }: Props) {
   const [statusFilter, setStatusFilter] = useState("all");
   const [leagueFilter, setLeagueFilter] = useState("all");
   const [forecastMode, setForecastMode] = useState<ForecastMode>("monthly");
-  const [sortMode, setSortMode] = useState<SortMode>("official");
-  const filteredRows = useMemo(() => data.rows.filter((row) => (
-    (statusFilter === "all" || row.status === statusFilter)
-    && (leagueFilter === "all" || row.league === leagueFilter)
-  )), [data.rows, leagueFilter, statusFilter]);
+  const [sortKey, setSortKey] = useState<SortKey>("rank");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+
+  useEffect(() => {
+    setSortKey(data.view_mode === "probable" ? "projected_next_season_rank" : "rank");
+    setSortDirection("asc");
+  }, [data.view_mode]);
+
+  const filteredRows = useMemo(() => data.rows.filter((row) => {
+    const visibleLeague = data.view_mode === "probable" ? row.display_league : row.league;
+    return (statusFilter === "all" || row.status === statusFilter)
+      && (leagueFilter === "all" || visibleLeague === leagueFilter);
+  }), [data.rows, data.view_mode, leagueFilter, statusFilter]);
+
   const rows = useMemo(
-    () => sortMode === "smart" ? sortSmart(filteredRows) : filteredRows,
-    [filteredRows, sortMode],
+    () => [...filteredRows].sort((left, right) => compareRows(left, right, sortKey, sortDirection)),
+    [filteredRows, sortDirection, sortKey],
   );
   const focus = data.selected_pilot ?? data.rows.find((row) => row.pilot === selectedPilot) ?? null;
   const forecast = focus ? focus[forecastMode === "weekly" ? "forecast_weekly" : "forecast_monthly"] : null;
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDirection((value) => value === "asc" ? "desc" : "asc");
+    } else {
+      setSortKey(key);
+      setSortDirection("asc");
+    }
+  };
+
+  const sortButton = (key: SortKey, label: string) => (
+    <button
+      type="button"
+      className="table-sort-button"
+      onClick={() => handleSort(key)}
+      aria-label={`Sort by ${label}`}
+      aria-sort={sortKey === key ? sortDirection === "asc" ? "ascending" : "descending" : "none"}
+    >
+      {label}{sortKey === key ? (sortDirection === "asc" ? " ^" : " v") : ""}
+    </button>
+  );
 
   return (
     <div className="stack">
@@ -63,26 +126,34 @@ export function GlobalLeaderboardPanel({ data, selectedPilot }: Props) {
             <h2>{selectedPilot} outlook</h2>
           </div>
           <div className="meta">
-            <span>{data.window_from} → {data.window_to}</span>
-            <span>Season-start snapshot: {data.season_start_snapshot_date ?? "not available"}</span>
+            <label className="date-selector">
+              <span>Leaderboard date</span>
+              <input type="date" value={data.as_of_date} max={data.latest_data_date ?? undefined} onChange={(event) => onDateChange(event.target.value)} />
+            </label>
+            <span>{data.window_from} to {data.window_to}</span>
+            <span>Season start: {data.season_start_snapshot_date ?? "not available"}</span>
+            <span>Change reference: {data.change_reference_date ?? "not available"}</span>
           </div>
         </div>
+        {data.is_historical ? (
+          <p className="history-note">Historical slice: results after {data.as_of_date} are excluded. Current gap is shown only as a reference and does not affect this ranking.</p>
+        ) : null}
         {focus ? (
           <>
             <div className="stat-grid global-leaderboard-kpis">
               <div className="stat-card"><span>Season start rank</span><strong>{rankLabel(focus.season_start_rank)}</strong></div>
               <div className="stat-card"><span>Current rank</span><strong>{leagueLabel(focus.league)} {rankLabel(focus.rank)}</strong></div>
-              <div className="stat-card"><span>Projected next season</span><strong>{leagueLabel(focus.projected_next_season_league)} {rankLabel(focus.projected_next_season_rank)}</strong></div>
+              <div className="stat-card"><span>Projected next month</span><strong>{leagueLabel(focus.projected_next_season_league)} {rankLabel(focus.projected_next_season_rank)}</strong></div>
               <div className="stat-card"><span>Flight-days / 30</span><strong>{focus.flight_days} / {data.window_days}</strong></div>
-              <div className="stat-card"><span>Gap to leader</span><strong>{percentLabel(focus.adjusted_average_gap_percentage)}</strong></div>
-              <div className="stat-card"><span>Days needed to stay</span><strong>{focus.days_needed_for_next_season} / {focus.available_days_before_next_season}</strong></div>
+              <div className="stat-card"><span>Gap to top 3 (%)</span><strong>{percentLabel(focus.adjusted_average_gap_percentage)}</strong></div>
+              <div className="stat-card"><span>Need / remain</span><strong>{focus.days_needed_for_next_season} / {focus.available_days_before_next_season}</strong></div>
             </div>
             <p className="chart-note">{focus.status_reason}</p>
             {forecast ? (
               <div className="forecast-strip">
                 <div className="toggle-row">
                   <button type="button" className={forecastMode === "weekly" ? "chip active" : "chip"} onClick={() => setForecastMode("weekly")}>Next Monday</button>
-                  <button type="button" className={forecastMode === "monthly" ? "chip active" : "chip"} onClick={() => setForecastMode("monthly")}>Next season</button>
+                  <button type="button" className={forecastMode === "monthly" ? "chip active" : "chip"} onClick={() => setForecastMode("monthly")}>Next month</button>
                 </div>
                 <span>Without flying: {forecast.no_flight_days} days</span>
                 <span>If flying: {forecast.continue_flight_days} days</span>
@@ -90,42 +161,65 @@ export function GlobalLeaderboardPanel({ data, selectedPilot }: Props) {
               </div>
             ) : null}
           </>
-        ) : <p>No active results in the current 30-day window.</p>}
+        ) : <p>No active results in the selected 30-day window.</p>}
       </section>
 
       <section className="panel">
         <div className="panel-header">
           <div>
-            <p className="eyebrow">Current field</p>
-            <h2>Active pilots and next-season risk</h2>
+            <p className="eyebrow">{data.view_mode === "probable" ? "Probable next-month field" : "Current field"}</p>
+            <h2>{data.view_mode === "probable" ? "Projected leaderboard" : "Active pilots and next-season risk"}</h2>
           </div>
           <div className="toggle-row leaderboard-filters">
-            <button type="button" className={sortMode === "smart" ? "chip active" : "chip"} onClick={() => setSortMode((value) => value === "smart" ? "official" : "smart")}>Sort by chances / risk</button>
+            <button
+              type="button"
+              className={data.view_mode === "probable" ? "chip active" : "chip"}
+              disabled={data.is_historical}
+              onClick={() => onViewModeChange(data.view_mode === "probable" ? "current" : "probable")}
+            >
+              {data.view_mode === "probable" ? "Show current leaderboard" : "Show probable next month"}
+            </button>
             <label>Status <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="all">All</option><option value="qualified">Qualified</option><option value="at_risk">At risk</option><option value="candidate">Candidate</option><option value="guaranteed_out">Guaranteed out</option></select></label>
-            <label>League <select value={leagueFilter} onChange={(event) => setLeagueFilter(event.target.value)}><option value="all">All</option><option value="gold">Gold</option><option value="silver">Silver</option><option value="bronze">Bronze</option></select></label>
+            <label>League <select value={leagueFilter} onChange={(event) => setLeagueFilter(event.target.value)}><option value="all">All</option><option value="gold">Gold</option><option value="silver">Silver</option><option value="bronze">Bronze</option><option value="unranked">Unranked</option></select></label>
           </div>
         </div>
         <div className="table-scroll">
           <table className="scoreboard compact-scoreboard global-leaderboard-table">
-            <thead><tr><th>Start</th><th>Current</th><th>Next season</th><th>Pilot</th><th>League</th><th>Days</th><th>Need / remain</th><th>Gap</th><th>Inactive</th><th>Change</th><th>Outlook</th></tr></thead>
+            <thead><tr>
+              <th>{sortButton("season_start_rank", "Start")}</th>
+              <th>{sortButton("rank", "Current")}</th>
+              <th>{sortButton("projected_next_season_rank", "Projected")}</th>
+              <th>{sortButton("pilot", "Pilot")}</th>
+              <th>{sortButton("league", "Current league")}</th>
+              <th>{sortButton("flight_days", "Days")}</th>
+              <th>{sortButton("days_needed_for_next_season", "Need / remain")}</th>
+              <th>{sortButton("inactive_days", "Inactive")}</th>
+              <th>{sortButton("adjusted_average_gap_percentage", "Gap")}</th>
+              {data.is_historical ? <th>{sortButton("current_gap_percentage", "Current gap")}</th> : null}
+              <th>{sortButton("rank_delta", "Change")}</th>
+              <th>{sortButton("projected_next_season_league", "Projected league")}</th>
+              <th>{sortButton("status", "Outlook")}</th>
+            </tr></thead>
             <tbody>{rows.map((row) => (
               <tr key={row.pilot} className={row.pilot === selectedPilot ? "active-row" : undefined}>
                 <td>{rankLabel(row.season_start_rank)}</td>
                 <td>{rankLabel(row.rank)}</td>
                 <td>{rankLabel(row.projected_next_season_rank)}</td>
                 <td><strong>{row.pilot}</strong>{row.country ? <small className="table-muted"> {row.country}</small> : null}</td>
-                <td><span className={`league-pill league-${row.league ?? "candidate"}`}>{leagueLabel(row.league)}</span></td>
-                <td>{row.flight_days}/{data.window_days}</td>
+                <td><span className={leagueClass(row.league)}>{leagueLabel(row.league)}</span></td>
+                <td>{row.flight_days}/{data.window_days}<small className="table-muted">{row.scored_days} scored</small></td>
                 <td>{row.days_needed_for_next_season} / {row.available_days_before_next_season}<small className="table-muted">{row.can_pass_next_season ? "can pass" : "not enough days"}</small></td>
+                <td>{row.inactive_days}<small className="table-muted">since last flight</small><small className="table-muted">season missed: {row.season_missed_days}</small></td>
                 <td>{percentLabel(row.adjusted_average_gap_percentage)}</td>
-                <td>{row.inactive_days}</td>
-                <td>{deltaLabel(row)}</td>
+                {data.is_historical ? <td>{percentLabel(row.current_gap_percentage)}</td> : null}
+                <td>{deltaLabel(row)}<small className="table-muted">vs {data.change_reference_date ?? "-"}</small></td>
+                <td><span className={leagueClass(row.projected_next_season_league)}>{leagueLabel(row.projected_next_season_league)}</span><small className="table-muted">{rankLabel(row.projected_next_season_rank)}</small></td>
                 <td><span className={`status-pill status-${row.status}`}>{row.status.replace("_", " ")}</span><small className="table-reason">{row.status_reason}</small></td>
               </tr>
             ))}</tbody>
           </table>
         </div>
-        <p className="chart-note">Gap is the adjusted average percentage behind the daily top-three average, excluding one worst day. “Need / remain” counts flights required before the end of the current month to stay or become eligible for the next season.</p>
+        <p className="chart-note">Click any column heading to sort. `Need / remain` shows extra flight-days needed before the next month and available days left in the current season. Inactive is days since the last flight; season missed is a separate count from the pilot's first flight in this season.</p>
       </section>
     </div>
   );

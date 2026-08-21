@@ -29,20 +29,52 @@ class GlobalLeaderboardService:
         race_class: str,
         as_of_date: date | None = None,
         selected_pilot: str | None = None,
+        view_mode: str = "current",
     ) -> dict:
+        if view_mode not in {"current", "probable"}:
+            raise ValueError("view_mode must be current or probable")
         as_of = as_of_date or self._latest_date(race_class=race_class) or date.today()
         state = self._calculate_state(race_class=race_class, as_of_date=as_of)
         self._apply_projection_ranks(state["rows"], forecast_key="weekly")
         self._apply_projection_ranks(state["rows"], forecast_key="monthly")
 
+        latest_data_date = self._latest_date(race_class=race_class)
+        is_historical = latest_data_date is not None and as_of < latest_data_date
+        current_gap_by_pilot: dict[str, float | None] = {}
+        if is_historical and latest_data_date is not None:
+            current_state = self._calculate_state(race_class=race_class, as_of_date=latest_data_date)
+            current_gap_by_pilot = {
+                row["pilot"]: row["adjusted_average_gap_percentage"]
+                for row in current_state["rows"]
+            }
+
         latest_snapshot = self._latest_snapshot(race_class=race_class, as_of_date=as_of)
-        previous_snapshot = self._previous_snapshot(
-            race_class=race_class,
-            as_of_date=latest_snapshot.snapshot_date if latest_snapshot is not None else as_of,
-        )
-        previous_rows = self._snapshot_rows(previous_snapshot.id) if previous_snapshot is not None else {}
         season_start_snapshot = self._season_start_snapshot(race_class=race_class, as_of_date=as_of)
-        season_start_rows = self._snapshot_rows(season_start_snapshot.id) if season_start_snapshot is not None else {}
+        if season_start_snapshot is not None:
+            season_start_rows = self._snapshot_rows(season_start_snapshot.id)
+            season_start_reference_date = season_start_snapshot.snapshot_date
+        else:
+            season_start_reference_date = date(as_of.year, as_of.month, 1)
+            season_start_state = self._calculate_state(
+                race_class=race_class,
+                as_of_date=season_start_reference_date,
+            )
+            season_start_rows = self._state_rank_rows(season_start_state)
+
+        change_snapshot = self._change_reference_snapshot(race_class=race_class, as_of_date=as_of)
+        if change_snapshot is not None:
+            change_rows = self._snapshot_rows(change_snapshot.id)
+            change_reference_date = change_snapshot.snapshot_date
+            change_reference_kind = change_snapshot.calculation_kind
+        else:
+            week_start = max(
+                date(as_of.year, as_of.month, 1),
+                as_of - timedelta(days=as_of.weekday()),
+            )
+            change_reference_date = week_start
+            change_reference_kind = "computed"
+            change_state = self._calculate_state(race_class=race_class, as_of_date=week_start)
+            change_rows = self._state_rank_rows(change_state)
 
         rows = []
         for row in state["rows"]:
@@ -51,30 +83,49 @@ class GlobalLeaderboardService:
                 for key, value in row.items()
                 if not key.startswith("_")
             }
-            previous = previous_rows.get(row["pilot"], {})
+            change = change_rows.get(row["pilot"], {})
             season_start = season_start_rows.get(row["pilot"], {})
-            decorated["rank_delta"] = self._rank_delta(row["rank"], previous.get("rank"))
-            decorated["league_delta"] = self._league_delta(row["league"], previous.get("league"))
+            decorated["rank_delta"] = self._rank_delta(row["rank"], change.get("rank"))
+            decorated["league_delta"] = self._league_delta(row["league"], change.get("league"))
             decorated["season_start_rank"] = season_start.get("rank")
             decorated["season_start_league"] = season_start.get("league")
-            decorated["season_start_snapshot_date"] = season_start_snapshot.snapshot_date if season_start_snapshot else None
+            decorated["season_start_snapshot_date"] = season_start_reference_date
             monthly = row["forecast_monthly"]
             decorated["projected_next_season_rank"] = monthly["continue_rank"]
-            decorated["projected_next_season_league"] = monthly["continue_league"]
+            decorated["projected_next_season_league"] = monthly["continue_league"] or "unranked"
             decorated["projected_next_season_eligible"] = monthly["continue_rank"] is not None
             decorated["status"] = self._status_for(row=row)
             decorated["status_reason"] = self._status_reason(row=row, season_end_date=state["season_end_date"])
+            decorated["current_gap_percentage"] = current_gap_by_pilot.get(row["pilot"]) if is_historical else None
+            if view_mode == "probable":
+                decorated["display_rank"] = monthly["continue_rank"]
+                decorated["display_league"] = monthly["continue_league"] or "unranked"
+            else:
+                decorated["display_rank"] = row["rank"]
+                decorated["display_league"] = row["league"]
             rows.append(decorated)
 
+        rows.sort(
+            key=lambda row: (
+                row["display_rank"] is None,
+                row["display_rank"] if row["display_rank"] is not None else math.inf,
+                row["pilot"],
+            ),
+        )
         selected = next((row for row in rows if row["pilot"] == selected_pilot), None)
         return {
             "race_class": race_class,
+            "view_mode": view_mode,
             "as_of_date": as_of,
+            "latest_data_date": latest_data_date,
+            "is_historical": is_historical,
             "window_from": state["window_from"],
             "window_to": state["window_to"],
             "last_official_snapshot_date": latest_snapshot.snapshot_date if latest_snapshot else None,
             "last_official_snapshot_kind": latest_snapshot.calculation_kind if latest_snapshot else None,
-            "season_start_snapshot_date": season_start_snapshot.snapshot_date if season_start_snapshot else None,
+            "season_start_snapshot_date": season_start_reference_date,
+            "change_reference_date": change_reference_date,
+            "change_reference_kind": change_reference_kind,
             "next_weekly_checkpoint": state["next_weekly_checkpoint"],
             "next_month_start": state["next_month_start"],
             "season_end_date": state["season_end_date"],
@@ -163,6 +214,31 @@ class GlobalLeaderboardService:
             .order_by(DaySpecModel.date, ResultModel.time, PilotModel.pilot),
         ).all()
 
+        all_timed_rows = self.session.execute(
+            select(DaySpecModel.date, PilotModel.pilot)
+            .join(ResultModel, ResultModel.day_spec_ref == DaySpecModel.id)
+            .join(PilotModel, PilotModel.id == ResultModel.pilot_ref)
+            .where(
+                DaySpecModel.race_class == race_class,
+                DaySpecModel.date <= as_of_date,
+                ResultModel.time.is_not(None),
+            ),
+        ).all()
+        all_flight_dates: dict[str, set[date]] = defaultdict(set)
+        for race_date, pilot in all_timed_rows:
+            all_flight_dates[pilot].add(race_date)
+
+        season_start = date(as_of_date.year, as_of_date.month, 1)
+        season_race_days = set(
+            self.session.scalars(
+                select(DaySpecModel.date).where(
+                    DaySpecModel.race_class == race_class,
+                    DaySpecModel.date >= season_start,
+                    DaySpecModel.date <= as_of_date,
+                ),
+            ).all(),
+        )
+
         day_rows: dict[date, list[tuple[int, str, str | None, float]]] = defaultdict(list)
         for race_date, time_value, pilot_ref, pilot, country in raw_rows:
             day_rows[race_date].append((pilot_ref, pilot, country, float(time_value)))
@@ -198,6 +274,18 @@ class GlobalLeaderboardService:
                 next_month_start=next_month_start,
                 season_end_date=season_end_date,
             )
+            all_dates = all_flight_dates.get(data["pilot"], set(dates))
+            first_flight_date = min(all_dates) if all_dates else None
+            season_flight_days = {
+                race_date
+                for race_date in all_dates
+                if season_start <= race_date <= as_of_date
+            }
+            season_counted_days = {
+                race_date
+                for race_date in season_race_days
+                if first_flight_date is not None and race_date >= first_flight_date
+            }
             rows.append(
                 {
                     "pilot_ref": data["pilot_ref"],
@@ -208,7 +296,9 @@ class GlobalLeaderboardService:
                     "flight_days": len(dates),
                     "scored_days": len(gaps),
                     "last_flight_date": dates[-1] if dates else None,
+                    "first_flight_date": first_flight_date,
                     "inactive_days": (as_of_date - dates[-1]).days if dates else self.WINDOW_DAYS,
+                    "season_missed_days": max(0, len(season_counted_days) - len(season_flight_days)),
                     "adjusted_average_gap_percentage": adjusted_average_gap,
                     "worst_day_gap_percentage": worst_day_gap,
                     "required_flight_days": max(0, self.MIN_FLIGHT_DAYS - len(dates)),
@@ -273,6 +363,13 @@ class GlobalLeaderboardService:
             "next_month_start": next_month_start,
             "season_end_date": season_end_date,
             "rows": rows,
+        }
+
+    @staticmethod
+    def _state_rank_rows(state: dict) -> dict[str, dict]:
+        return {
+            row["pilot"]: {"rank": row["rank"], "league": row["league"]}
+            for row in state["rows"]
         }
 
     def _forecast(
@@ -401,6 +498,20 @@ class GlobalLeaderboardService:
             .where(
                 GlobalLeaderboardSnapshotModel.race_class == race_class,
                 GlobalLeaderboardSnapshotModel.snapshot_date < as_of_date,
+            )
+            .order_by(GlobalLeaderboardSnapshotModel.snapshot_date.desc())
+            .limit(1),
+        ).scalar_one_or_none()
+
+    def _change_reference_snapshot(self, *, race_class: str, as_of_date: date) -> GlobalLeaderboardSnapshotModel | None:
+        season_start = date(as_of_date.year, as_of_date.month, 1)
+        week_start = max(season_start, as_of_date - timedelta(days=as_of_date.weekday()))
+        return self.session.execute(
+            select(GlobalLeaderboardSnapshotModel)
+            .where(
+                GlobalLeaderboardSnapshotModel.race_class == race_class,
+                GlobalLeaderboardSnapshotModel.snapshot_date >= week_start,
+                GlobalLeaderboardSnapshotModel.snapshot_date <= as_of_date,
             )
             .order_by(GlobalLeaderboardSnapshotModel.snapshot_date.desc())
             .limit(1),

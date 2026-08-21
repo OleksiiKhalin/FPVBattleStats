@@ -220,15 +220,20 @@ class GlobalLeaderboardForecast(BaseModel):
 class GlobalLeaderboardRow(BaseModel):
     pilot: str
     country: str | None = None
+    display_rank: int | None = None
+    display_league: str | None = None
     rank: int | None = None
     league: str | None = None
     status: str
     status_reason: str
     flight_days: int
     scored_days: int
+    first_flight_date: date | None = None
     last_flight_date: date | None = None
     inactive_days: int
+    season_missed_days: int
     adjusted_average_gap_percentage: float | None = None
+    current_gap_percentage: float | None = None
     worst_day_gap_percentage: float | None = None
     target_league: str | None = None
     gap_to_next_league_percentage: float | None = None
@@ -252,12 +257,17 @@ class GlobalLeaderboardRow(BaseModel):
 
 class GlobalLeaderboardResponse(BaseModel):
     race_class: str
+    view_mode: str
     as_of_date: date
+    latest_data_date: date | None = None
+    is_historical: bool
     window_from: date
     window_to: date
     last_official_snapshot_date: date | None = None
     last_official_snapshot_kind: str | None = None
     season_start_snapshot_date: date | None = None
+    change_reference_date: date | None = None
+    change_reference_kind: str | None = None
     next_weekly_checkpoint: date
     next_month_start: date
     season_end_date: date

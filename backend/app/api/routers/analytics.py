@@ -23,12 +23,14 @@ def get_global_leaderboard(
     race_class: str,
     as_of_date: date | None = Query(default=None),
     pilot_name: str | None = Query(default=None),
+    view_mode: str = Query(default="current", pattern="^(current|probable)$"),
     session: Session = Depends(get_session),
 ) -> GlobalLeaderboardResponse:
     payload = GlobalLeaderboardService(session).get_global_leaderboard(
         race_class=race_class,
         as_of_date=as_of_date,
         selected_pilot=pilot_name,
+        view_mode=view_mode,
     )
     return GlobalLeaderboardResponse.model_validate(payload)
 

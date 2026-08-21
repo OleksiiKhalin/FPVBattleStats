@@ -190,15 +190,20 @@ export type GlobalLeaderboardForecast = {
 export type GlobalLeaderboardRow = {
   pilot: string;
   country: string | null;
+  display_rank: number | null;
+  display_league: string | null;
   rank: number | null;
   league: string | null;
   status: "qualified" | "at_risk" | "guaranteed_out" | "candidate";
   status_reason: string;
   flight_days: number;
   scored_days: number;
+  first_flight_date: string | null;
   last_flight_date: string | null;
   inactive_days: number;
+  season_missed_days: number;
   adjusted_average_gap_percentage: number | null;
+  current_gap_percentage: number | null;
   worst_day_gap_percentage: number | null;
   target_league: string | null;
   gap_to_next_league_percentage: number | null;
@@ -222,12 +227,17 @@ export type GlobalLeaderboardRow = {
 
 export type GlobalLeaderboardResponse = {
   race_class: string;
+  view_mode: "current" | "probable";
   as_of_date: string;
+  latest_data_date: string | null;
+  is_historical: boolean;
   window_from: string;
   window_to: string;
   last_official_snapshot_date: string | null;
   last_official_snapshot_kind: string | null;
   season_start_snapshot_date: string | null;
+  change_reference_date: string | null;
+  change_reference_kind: string | null;
   next_weekly_checkpoint: string;
   next_month_start: string;
   season_end_date: string;

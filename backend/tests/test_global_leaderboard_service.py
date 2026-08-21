@@ -76,6 +76,7 @@ def test_global_leaderboard_uses_30_day_window_top_three_and_worst_day_exclusion
     assert rows["Target"]["scored_days"] == 15
     assert rows["Target"]["worst_day_gap_percentage"] == pytest.approx(909.091)
     assert rows["Target"]["adjusted_average_gap_percentage"] == pytest.approx(68.182)
+    assert rows["Target"]["season_missed_days"] == 15
     assert rows["Target"]["status"] == "at_risk"
     assert rows["Target"]["inactive_days"] == 15
     assert rows["Target"]["days_needed_for_next_season"] == 2
@@ -164,4 +165,87 @@ def test_season_start_rank_uses_first_available_snapshot_in_current_month() -> N
     assert payload["season_start_snapshot_date"] == date(2026, 8, 10)
     assert payload["selected_pilot"]["season_start_rank"] == 1
     assert payload["selected_pilot"]["season_start_snapshot_date"] == date(2026, 8, 10)
+    session.close()
+
+
+def test_season_start_rank_is_computed_when_no_official_snapshot_exists() -> None:
+    session = _build_session()
+    for offset in range(-29, 20):
+        race_date = date(2026, 8, 1) + timedelta(days=offset)
+        _add_day(session, race_date, "open", [("Pilot A", 10.0), ("Pilot B", 11.0), ("Pilot C", 12.0)])
+    session.commit()
+
+    payload = GlobalLeaderboardService(session).get_global_leaderboard(
+        race_class="open",
+        as_of_date=date(2026, 8, 20),
+        selected_pilot="Pilot A",
+    )
+
+    assert payload["season_start_snapshot_date"] == date(2026, 8, 1)
+    assert payload["selected_pilot"]["season_start_rank"] == 1
+    assert payload["selected_pilot"]["season_start_league"] == "gold"
+    session.close()
+
+
+def test_probable_view_uses_projected_rank_and_projected_league() -> None:
+    session = _build_session()
+    start = date(2026, 8, 1)
+    for offset in range(20):
+        race_date = start + timedelta(days=offset)
+        results = [("Leader A", 10.0), ("Leader B", 11.0), ("Leader C", 12.0)]
+        if offset < 15:
+            results.append(("Qualified", 20.0))
+        if offset >= 15:
+            results.append(("Late Pilot", 20.5))
+        if offset == 19:
+            results.append(("Too Late", 20.7))
+        _add_day(session, race_date, "open", results)
+    session.commit()
+
+    payload = GlobalLeaderboardService(session).get_global_leaderboard(
+        race_class="open",
+        as_of_date=date(2026, 8, 20),
+        selected_pilot="Late Pilot",
+        view_mode="probable",
+    )
+
+    late_pilot = payload["selected_pilot"]
+    assert payload["view_mode"] == "probable"
+    assert payload["change_reference_date"] == date(2026, 8, 17)
+    assert payload["change_reference_kind"] == "computed"
+    assert late_pilot is not None
+    assert late_pilot["display_rank"] == late_pilot["projected_next_season_rank"]
+    assert late_pilot["display_league"] == late_pilot["projected_next_season_league"]
+    assert late_pilot["display_league"] in {"gold", "silver", "bronze"}
+    too_late = next(row for row in payload["rows"] if row["pilot"] == "Too Late")
+    assert too_late["display_rank"] is None
+    assert too_late["display_league"] == "unranked"
+    session.close()
+
+
+def test_historical_slice_excludes_future_rows_but_exposes_current_gap_separately() -> None:
+    session = _build_session()
+    for offset in range(20):
+        race_date = date(2026, 8, 1) + timedelta(days=offset)
+        results = [("Leader A", 10.0), ("Leader B", 11.0), ("Leader C", 12.0)]
+        if offset < 15 or offset >= 18:
+            results.append(("Returning Pilot", 20.0))
+        if offset >= 18:
+            results.append(("Future Pilot", 20.5))
+        _add_day(session, race_date, "open", results)
+    session.commit()
+
+    payload = GlobalLeaderboardService(session).get_global_leaderboard(
+        race_class="open",
+        as_of_date=date(2026, 8, 15),
+        selected_pilot="Returning Pilot",
+    )
+    rows = {row["pilot"]: row for row in payload["rows"]}
+
+    assert payload["is_historical"] is True
+    assert payload["latest_data_date"] == date(2026, 8, 20)
+    assert "Future Pilot" not in rows
+    assert rows["Returning Pilot"]["current_gap_percentage"] == pytest.approx(
+        rows["Returning Pilot"]["adjusted_average_gap_percentage"],
+    )
     session.close()
