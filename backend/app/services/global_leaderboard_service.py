@@ -61,20 +61,10 @@ class GlobalLeaderboardService:
             )
             season_start_rows = self._state_rank_rows(season_start_state)
 
-        change_snapshot = self._change_reference_snapshot(race_class=race_class, as_of_date=as_of)
-        if change_snapshot is not None:
-            change_rows = self._snapshot_rows(change_snapshot.id)
-            change_reference_date = change_snapshot.snapshot_date
-            change_reference_kind = change_snapshot.calculation_kind
-        else:
-            week_start = max(
-                date(as_of.year, as_of.month, 1),
-                as_of - timedelta(days=as_of.weekday()),
-            )
-            change_reference_date = week_start
-            change_reference_kind = "computed"
-            change_state = self._calculate_state(race_class=race_class, as_of_date=week_start)
-            change_rows = self._state_rank_rows(change_state)
+        change_reference_date, change_reference_kind, change_rows = self._change_reference(
+            race_class=race_class,
+            as_of_date=as_of,
+        )
 
         rows = []
         for row in state["rows"]:
@@ -87,6 +77,12 @@ class GlobalLeaderboardService:
             season_start = season_start_rows.get(row["pilot"], {})
             decorated["rank_delta"] = self._rank_delta(row["rank"], change.get("rank"))
             decorated["league_delta"] = self._league_delta(row["league"], change.get("league"))
+            decorated["current_league"] = row["league"] or "unranked"
+            decorated["gap_change_percentage"] = self._gap_change(
+                current=row["adjusted_average_gap_percentage"],
+                baseline=change.get("adjusted_average_gap"),
+            )
+            decorated["change_reference_gap_percentage"] = change.get("adjusted_average_gap")
             decorated["season_start_rank"] = season_start.get("rank")
             decorated["season_start_league"] = season_start.get("league")
             decorated["season_start_snapshot_date"] = season_start_reference_date
@@ -102,7 +98,7 @@ class GlobalLeaderboardService:
                 decorated["display_league"] = monthly["continue_league"] or "unranked"
             else:
                 decorated["display_rank"] = row["rank"]
-                decorated["display_league"] = row["league"]
+                decorated["display_league"] = row["league"] or "unranked"
             rows.append(decorated)
 
         rows.sort(
@@ -286,6 +282,20 @@ class GlobalLeaderboardService:
                 for race_date in season_race_days
                 if first_flight_date is not None and race_date >= first_flight_date
             }
+            recent_7_days = {
+                race_date
+                for race_date in season_race_days
+                if as_of_date - timedelta(days=6) <= race_date <= as_of_date
+                and first_flight_date is not None
+                and race_date >= first_flight_date
+            }
+            recent_15_days = {
+                race_date
+                for race_date in season_race_days
+                if as_of_date - timedelta(days=14) <= race_date <= as_of_date
+                and first_flight_date is not None
+                and race_date >= first_flight_date
+            }
             rows.append(
                 {
                     "pilot_ref": data["pilot_ref"],
@@ -299,6 +309,8 @@ class GlobalLeaderboardService:
                     "first_flight_date": first_flight_date,
                     "inactive_days": (as_of_date - dates[-1]).days if dates else self.WINDOW_DAYS,
                     "season_missed_days": max(0, len(season_counted_days) - len(season_flight_days)),
+                    "missed_last_7_days": len(recent_7_days - season_flight_days),
+                    "missed_last_15_days": len(recent_15_days - season_flight_days),
                     "adjusted_average_gap_percentage": adjusted_average_gap,
                     "worst_day_gap_percentage": worst_day_gap,
                     "required_flight_days": max(0, self.MIN_FLIGHT_DAYS - len(dates)),
@@ -368,9 +380,72 @@ class GlobalLeaderboardService:
     @staticmethod
     def _state_rank_rows(state: dict) -> dict[str, dict]:
         return {
-            row["pilot"]: {"rank": row["rank"], "league": row["league"]}
+            row["pilot"]: {
+                "rank": row["rank"],
+                "league": row["league"],
+                "adjusted_average_gap": row["adjusted_average_gap_percentage"],
+            }
             for row in state["rows"]
         }
+
+    def _change_reference(
+        self,
+        *,
+        race_class: str,
+        as_of_date: date,
+    ) -> tuple[date, str, dict[str, dict]]:
+        season_start = date(as_of_date.year, as_of_date.month, 1)
+        weekly_date = max(season_start, as_of_date - timedelta(days=as_of_date.weekday()))
+        weekly_snapshot = self._change_reference_snapshot(
+            race_class=race_class,
+            as_of_date=as_of_date,
+            reference_from=weekly_date,
+        )
+        season_snapshot = self._season_start_snapshot(
+            race_class=race_class,
+            as_of_date=as_of_date,
+        )
+
+        candidates: list[tuple[int, date, str, dict[str, dict]]] = []
+        if weekly_snapshot is not None:
+            candidates.append(
+                (
+                    (as_of_date - weekly_snapshot.snapshot_date).days,
+                    weekly_snapshot.snapshot_date,
+                    "weekly",
+                    self._snapshot_rows(weekly_snapshot.id),
+                ),
+            )
+        else:
+            weekly_state = self._calculate_state(race_class=race_class, as_of_date=weekly_date)
+            candidates.append(
+                (
+                    (as_of_date - weekly_date).days,
+                    weekly_date,
+                    "computed_weekly",
+                    self._state_rank_rows(weekly_state),
+                ),
+            )
+
+        season_date = season_snapshot.snapshot_date if season_snapshot is not None else season_start
+        season_rows = (
+            self._snapshot_rows(season_snapshot.id)
+            if season_snapshot is not None
+            else self._state_rank_rows(self._calculate_state(race_class=race_class, as_of_date=season_start))
+        )
+        candidates.append(
+            (
+                (as_of_date - season_date).days,
+                season_date,
+                "season" if season_snapshot is not None else "computed_season",
+                season_rows,
+            ),
+        )
+        _, reference_date, reference_kind, reference_rows = min(
+            candidates,
+            key=lambda item: (item[0], 0 if item[2].startswith("weekly") else 1),
+        )
+        return reference_date, reference_kind, reference_rows
 
     def _forecast(
         self,
@@ -503,14 +578,18 @@ class GlobalLeaderboardService:
             .limit(1),
         ).scalar_one_or_none()
 
-    def _change_reference_snapshot(self, *, race_class: str, as_of_date: date) -> GlobalLeaderboardSnapshotModel | None:
-        season_start = date(as_of_date.year, as_of_date.month, 1)
-        week_start = max(season_start, as_of_date - timedelta(days=as_of_date.weekday()))
+    def _change_reference_snapshot(
+        self,
+        *,
+        race_class: str,
+        as_of_date: date,
+        reference_from: date,
+    ) -> GlobalLeaderboardSnapshotModel | None:
         return self.session.execute(
             select(GlobalLeaderboardSnapshotModel)
             .where(
                 GlobalLeaderboardSnapshotModel.race_class == race_class,
-                GlobalLeaderboardSnapshotModel.snapshot_date >= week_start,
+                GlobalLeaderboardSnapshotModel.snapshot_date >= reference_from,
                 GlobalLeaderboardSnapshotModel.snapshot_date <= as_of_date,
             )
             .order_by(GlobalLeaderboardSnapshotModel.snapshot_date.desc())
@@ -548,7 +627,11 @@ class GlobalLeaderboardService:
             .where(GlobalLeaderboardRowModel.snapshot_ref == snapshot_id),
         ).all()
         return {
-            pilot: {"rank": row.rank, "league": row.league}
+            pilot: {
+                "rank": row.rank,
+                "league": row.league,
+                "adjusted_average_gap": row.adjusted_average_gap,
+            }
             for row, pilot in rows
         }
 
@@ -602,6 +685,12 @@ class GlobalLeaderboardService:
         if current is None or previous is None:
             return None
         return previous - current
+
+    @staticmethod
+    def _gap_change(current: float | None, baseline: float | None) -> float | None:
+        if current is None or baseline is None:
+            return None
+        return round(current - baseline, 3)
 
     @staticmethod
     def _league_delta(current: str | None, previous: str | None) -> str | None:

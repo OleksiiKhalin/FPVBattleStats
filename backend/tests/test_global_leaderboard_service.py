@@ -197,7 +197,7 @@ def test_probable_view_uses_projected_rank_and_projected_league() -> None:
             results.append(("Qualified", 20.0))
         if offset >= 15:
             results.append(("Late Pilot", 20.5))
-        if offset == 19:
+        if offset == 13:
             results.append(("Too Late", 20.7))
         _add_day(session, race_date, "open", results)
     session.commit()
@@ -212,15 +212,25 @@ def test_probable_view_uses_projected_rank_and_projected_league() -> None:
     late_pilot = payload["selected_pilot"]
     assert payload["view_mode"] == "probable"
     assert payload["change_reference_date"] == date(2026, 8, 17)
-    assert payload["change_reference_kind"] == "computed"
+    assert payload["change_reference_kind"] == "computed_weekly"
     assert late_pilot is not None
     assert late_pilot["display_rank"] == late_pilot["projected_next_season_rank"]
     assert late_pilot["display_league"] == late_pilot["projected_next_season_league"]
     assert late_pilot["display_league"] in {"gold", "silver", "bronze"}
+    assert late_pilot["current_league"] == "unranked"
     too_late = next(row for row in payload["rows"] if row["pilot"] == "Too Late")
     assert too_late["display_rank"] is None
     assert too_late["display_league"] == "unranked"
+    assert too_late["current_league"] == "unranked"
+    assert too_late["missed_last_7_days"] == 6
+    assert too_late["missed_last_15_days"] == 6
     session.close()
+
+
+def test_gap_change_is_signed_current_minus_baseline() -> None:
+    assert GlobalLeaderboardService._gap_change(12.5, 10.0) == pytest.approx(2.5)
+    assert GlobalLeaderboardService._gap_change(8.0, 10.0) == pytest.approx(-2.0)
+    assert GlobalLeaderboardService._gap_change(None, 10.0) is None
 
 
 def test_historical_slice_excludes_future_rows_but_exposes_current_gap_separately() -> None:

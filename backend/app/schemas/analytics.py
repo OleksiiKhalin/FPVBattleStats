@@ -222,6 +222,7 @@ class GlobalLeaderboardRow(BaseModel):
     country: str | None = None
     display_rank: int | None = None
     display_league: str | None = None
+    current_league: str
     rank: int | None = None
     league: str | None = None
     status: str
@@ -232,8 +233,12 @@ class GlobalLeaderboardRow(BaseModel):
     last_flight_date: date | None = None
     inactive_days: int
     season_missed_days: int
+    missed_last_7_days: int
+    missed_last_15_days: int
     adjusted_average_gap_percentage: float | None = None
     current_gap_percentage: float | None = None
+    gap_change_percentage: float | None = None
+    change_reference_gap_percentage: float | None = None
     worst_day_gap_percentage: float | None = None
     target_league: str | None = None
     gap_to_next_league_percentage: float | None = None

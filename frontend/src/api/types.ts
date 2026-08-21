@@ -192,6 +192,7 @@ export type GlobalLeaderboardRow = {
   country: string | null;
   display_rank: number | null;
   display_league: string | null;
+  current_league: string;
   rank: number | null;
   league: string | null;
   status: "qualified" | "at_risk" | "guaranteed_out" | "candidate";
@@ -202,8 +203,12 @@ export type GlobalLeaderboardRow = {
   last_flight_date: string | null;
   inactive_days: number;
   season_missed_days: number;
+  missed_last_7_days: number;
+  missed_last_15_days: number;
   adjusted_average_gap_percentage: number | null;
   current_gap_percentage: number | null;
+  gap_change_percentage: number | null;
+  change_reference_gap_percentage: number | null;
   worst_day_gap_percentage: number | null;
   target_league: string | null;
   gap_to_next_league_percentage: number | null;
