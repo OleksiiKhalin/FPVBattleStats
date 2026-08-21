@@ -177,16 +177,18 @@ export function GlobalLeaderboardPanel({
               </div>
             ) : null}
             <div className="leaderboard-context">
-              <label className="date-selector">
-                <span>Leaderboard date</span>
-                <input type="date" value={data.as_of_date} max={data.latest_data_date ?? undefined} onChange={(event) => onDateChange(event.target.value)} />
-              </label>
-              <button type="button" className="chip" onClick={onDateReset}>Today / latest</button>
-              <label className="date-selector">
-                <span>Change reference</span>
-                <input type="date" value={displayedChangeReferenceDate} max={changeReferenceMax} onChange={(event) => onChangeReferenceDate(event.target.value)} />
-              </label>
-              <button type="button" className="chip" onClick={() => onChangeReferenceDate("")}>Reset change</button>
+              <div className="leaderboard-context-controls">
+                <label className="date-selector">
+                  <span>Leaderboard date</span>
+                  <input type="date" value={data.as_of_date} max={data.latest_data_date ?? undefined} onChange={(event) => onDateChange(event.target.value)} />
+                </label>
+                <button type="button" className="chip" onClick={onDateReset}>Today / latest</button>
+                <label className="date-selector">
+                  <span>Change reference</span>
+                  <input type="date" value={displayedChangeReferenceDate} max={changeReferenceMax} onChange={(event) => onChangeReferenceDate(event.target.value)} />
+                </label>
+                <button type="button" className="chip" onClick={() => onChangeReferenceDate("")}>Reset change</button>
+              </div>
               {data.is_historical ? (
                 <p className="history-note">Historical slice: results after {data.as_of_date} are excluded. Current gap is shown only as a reference and does not affect this ranking.</p>
               ) : null}
@@ -196,16 +198,18 @@ export function GlobalLeaderboardPanel({
           <>
             <p>No active results in the selected 30-day window.</p>
             <div className="leaderboard-context">
-              <label className="date-selector">
-                <span>Leaderboard date</span>
-                <input type="date" value={data.as_of_date} max={data.latest_data_date ?? undefined} onChange={(event) => onDateChange(event.target.value)} />
-              </label>
-              <button type="button" className="chip" onClick={onDateReset}>Today / latest</button>
-              <label className="date-selector">
-                <span>Change reference</span>
-                <input type="date" value={displayedChangeReferenceDate} max={changeReferenceMax} onChange={(event) => onChangeReferenceDate(event.target.value)} />
-              </label>
-              <button type="button" className="chip" onClick={() => onChangeReferenceDate("")}>Reset change</button>
+              <div className="leaderboard-context-controls">
+                <label className="date-selector">
+                  <span>Leaderboard date</span>
+                  <input type="date" value={data.as_of_date} max={data.latest_data_date ?? undefined} onChange={(event) => onDateChange(event.target.value)} />
+                </label>
+                <button type="button" className="chip" onClick={onDateReset}>Today / latest</button>
+                <label className="date-selector">
+                  <span>Change reference</span>
+                  <input type="date" value={displayedChangeReferenceDate} max={changeReferenceMax} onChange={(event) => onChangeReferenceDate(event.target.value)} />
+                </label>
+                <button type="button" className="chip" onClick={() => onChangeReferenceDate("")}>Reset change</button>
+              </div>
               {data.is_historical ? <p className="history-note">Historical slice: results after {data.as_of_date} are excluded. Current gap is shown only as a reference and does not affect this ranking.</p> : null}
             </div>
           </>
