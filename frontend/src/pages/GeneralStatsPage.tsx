@@ -88,14 +88,20 @@ export function GeneralStatsPage() {
   const [seasonSort, setSeasonSort] = useState<{ key: SeasonSortKey; direction: SortDirection }>({ key: "season", direction: "desc" });
   const [consistencySort, setConsistencySort] = useState<{ key: ConsistencySortKey; direction: SortDirection }>({ key: "consistency_score", direction: "desc" });
   const [improvementSort, setImprovementSort] = useState<{ key: ImprovementSortKey; direction: SortDirection }>({ key: "improvement_score", direction: "desc" });
+  const pilotFromQuery = searchParams.get("pilot");
 
   useEffect(() => {
+    // PilotSelector owns URL -> context reconciliation. Do not write the
+    // context default over a pilot from a deep link during the first render.
+    if (pilotFromQuery && pilotFromQuery !== selectedPilot) {
+      return;
+    }
     const params = new URLSearchParams({ class: raceClass, pilot: selectedPilot, section });
     if (dateFrom) params.set("from", dateFrom);
     if (dateTo) params.set("to", dateTo);
     if (consistentPilotsOnly) params.set("consistent", "true");
     if (params.toString() !== searchParams.toString()) setSearchParams(params, { replace: true });
-  }, [consistentPilotsOnly, dateFrom, dateTo, raceClass, searchParams, section, selectedPilot, setSearchParams]);
+  }, [consistentPilotsOnly, dateFrom, dateTo, pilotFromQuery, raceClass, searchParams, section, selectedPilot, setSearchParams]);
   const stats = useApi<GeneralStatsResponse>(
     () => fetchJson(buildGeneralStatsPath(raceClass, dateFrom, dateTo, selectedPilot, consistentPilotsOnly)),
     [raceClass, dateFrom, dateTo, selectedPilot, consistentPilotsOnly],

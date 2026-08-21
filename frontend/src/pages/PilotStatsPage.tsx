@@ -73,15 +73,20 @@ export function PilotStatsPage() {
   const [leaderboardViewMode, setLeaderboardViewMode] = useState<"current" | "probable">(
     searchParams.get("leaderboard_view") === "probable" ? "probable" : "current",
   );
+  const pilotFromQuery = searchParams.get("viewpoint") ?? searchParams.get("pilot");
 
   useEffect(() => {
-    const pilotFromQuery = searchParams.get("viewpoint") ?? searchParams.get("pilot");
     if (pilotFromQuery) {
       setSelectedPilot(pilotFromQuery);
     }
-  }, [searchParams, setSelectedPilot]);
+  }, [pilotFromQuery, setSelectedPilot]);
 
   useEffect(() => {
+    // Let the URL -> context sync settle before writing the URL back. This prevents
+    // the context default from overwriting a pilot supplied in a deep link.
+    if (pilotFromQuery && pilotFromQuery !== selectedPilot) {
+      return;
+    }
     const params = new URLSearchParams({ class: raceClass, viewpoint: selectedPilot, section });
     if (dateFrom) params.set("from", dateFrom);
     if (dateTo) params.set("to", dateTo);
@@ -90,7 +95,7 @@ export function PilotStatsPage() {
     if (leaderboardChangeReferenceDate) params.set("change_reference", leaderboardChangeReferenceDate);
     if (leaderboardViewMode === "probable") params.set("leaderboard_view", leaderboardViewMode);
     if (params.toString() !== searchParams.toString()) setSearchParams(params, { replace: true });
-  }, [comparisonOpponent, dateFrom, dateTo, leaderboardChangeReferenceDate, leaderboardDate, leaderboardViewMode, raceClass, searchParams, section, selectedPilot, setSearchParams]);
+  }, [comparisonOpponent, dateFrom, dateTo, leaderboardChangeReferenceDate, leaderboardDate, leaderboardViewMode, pilotFromQuery, raceClass, searchParams, section, selectedPilot, setSearchParams]);
 
   useEffect(() => {
     sessionStorage.setItem("fpvbattle-comparison-opponent", comparisonOpponent);
