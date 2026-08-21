@@ -165,6 +165,7 @@ def test_season_start_rank_uses_first_available_snapshot_in_current_month() -> N
     assert payload["season_start_snapshot_date"] == date(2026, 8, 10)
     assert payload["selected_pilot"]["season_start_rank"] == 1
     assert payload["selected_pilot"]["season_start_snapshot_date"] == date(2026, 8, 10)
+    assert payload["selected_pilot"]["current_league"] == "gold"
     session.close()
 
 
@@ -231,6 +232,25 @@ def test_gap_change_is_signed_current_minus_baseline() -> None:
     assert GlobalLeaderboardService._gap_change(12.5, 10.0) == pytest.approx(2.5)
     assert GlobalLeaderboardService._gap_change(8.0, 10.0) == pytest.approx(-2.0)
     assert GlobalLeaderboardService._gap_change(None, 10.0) is None
+
+
+def test_selected_change_reference_date_is_capped_at_leaderboard_date() -> None:
+    session = _build_session()
+    for offset in range(20):
+        race_date = date(2026, 8, 1) + timedelta(days=offset)
+        _add_day(session, race_date, "open", [("Pilot A", 10.0), ("Pilot B", 11.0), ("Pilot C", 12.0)])
+    session.commit()
+
+    payload = GlobalLeaderboardService(session).get_global_leaderboard(
+        race_class="open",
+        as_of_date=date(2026, 8, 20),
+        selected_pilot="Pilot A",
+        change_reference_date=date(2026, 8, 30),
+    )
+
+    assert payload["change_reference_date"] == date(2026, 8, 20)
+    assert payload["change_reference_kind"] == "selected_computed"
+    session.close()
 
 
 def test_historical_slice_excludes_future_rows_but_exposes_current_gap_separately() -> None:

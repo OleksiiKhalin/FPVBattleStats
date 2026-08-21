@@ -30,6 +30,7 @@ class GlobalLeaderboardService:
         as_of_date: date | None = None,
         selected_pilot: str | None = None,
         view_mode: str = "current",
+        change_reference_date: date | None = None,
     ) -> dict:
         if view_mode not in {"current", "probable"}:
             raise ValueError("view_mode must be current or probable")
@@ -64,6 +65,7 @@ class GlobalLeaderboardService:
         change_reference_date, change_reference_kind, change_rows = self._change_reference(
             race_class=race_class,
             as_of_date=as_of,
+            requested_date=change_reference_date,
         )
 
         rows = []
@@ -77,7 +79,7 @@ class GlobalLeaderboardService:
             season_start = season_start_rows.get(row["pilot"], {})
             decorated["rank_delta"] = self._rank_delta(row["rank"], change.get("rank"))
             decorated["league_delta"] = self._league_delta(row["league"], change.get("league"))
-            decorated["current_league"] = row["league"] or "unranked"
+            decorated["current_league"] = season_start.get("league") or "unranked"
             decorated["gap_change_percentage"] = self._gap_change(
                 current=row["adjusted_average_gap_percentage"],
                 baseline=change.get("adjusted_average_gap"),
@@ -393,7 +395,23 @@ class GlobalLeaderboardService:
         *,
         race_class: str,
         as_of_date: date,
+        requested_date: date | None = None,
     ) -> tuple[date, str, dict[str, dict]]:
+        if requested_date is not None:
+            reference_date = min(requested_date, as_of_date, date.today())
+            exact_snapshot = self.session.execute(
+                select(GlobalLeaderboardSnapshotModel)
+                .where(
+                    GlobalLeaderboardSnapshotModel.race_class == race_class,
+                    GlobalLeaderboardSnapshotModel.snapshot_date == reference_date,
+                )
+                .limit(1),
+            ).scalar_one_or_none()
+            if exact_snapshot is not None:
+                return reference_date, "selected_snapshot", self._snapshot_rows(exact_snapshot.id)
+            state = self._calculate_state(race_class=race_class, as_of_date=reference_date)
+            return reference_date, "selected_computed", self._state_rank_rows(state)
+
         season_start = date(as_of_date.year, as_of_date.month, 1)
         weekly_date = max(season_start, as_of_date - timedelta(days=as_of_date.weekday()))
         weekly_snapshot = self._change_reference_snapshot(

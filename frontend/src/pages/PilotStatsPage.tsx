@@ -69,6 +69,7 @@ export function PilotStatsPage() {
   const [showWeeklyAverage, setShowWeeklyAverage] = useState(false);
   const [showMonthlyAverage, setShowMonthlyAverage] = useState(false);
   const [leaderboardDate, setLeaderboardDate] = useState(searchParams.get("leaderboard_date") ?? "");
+  const [leaderboardChangeReferenceDate, setLeaderboardChangeReferenceDate] = useState(searchParams.get("change_reference") ?? "");
   const [leaderboardViewMode, setLeaderboardViewMode] = useState<"current" | "probable">(
     searchParams.get("leaderboard_view") === "probable" ? "probable" : "current",
   );
@@ -86,9 +87,10 @@ export function PilotStatsPage() {
     if (dateTo) params.set("to", dateTo);
     if (comparisonOpponent) params.set("opponent", comparisonOpponent);
     if (leaderboardDate) params.set("leaderboard_date", leaderboardDate);
+    if (leaderboardChangeReferenceDate) params.set("change_reference", leaderboardChangeReferenceDate);
     if (leaderboardViewMode === "probable") params.set("leaderboard_view", leaderboardViewMode);
     if (params.toString() !== searchParams.toString()) setSearchParams(params, { replace: true });
-  }, [comparisonOpponent, dateFrom, dateTo, leaderboardDate, leaderboardViewMode, raceClass, searchParams, section, selectedPilot, setSearchParams]);
+  }, [comparisonOpponent, dateFrom, dateTo, leaderboardChangeReferenceDate, leaderboardDate, leaderboardViewMode, raceClass, searchParams, section, selectedPilot, setSearchParams]);
 
   useEffect(() => {
     sessionStorage.setItem("fpvbattle-comparison-opponent", comparisonOpponent);
@@ -108,9 +110,10 @@ export function PilotStatsPage() {
         view_mode: leaderboardViewMode,
       });
       if (leaderboardDate) params.set("as_of_date", leaderboardDate);
+      if (leaderboardChangeReferenceDate) params.set("change_reference_date", leaderboardChangeReferenceDate);
       return fetchJson(`/analytics/global-leaderboard/${raceClass}?${params.toString()}`);
     },
-    [leaderboardDate, leaderboardViewMode, raceClass, selectedPilot],
+    [leaderboardChangeReferenceDate, leaderboardDate, leaderboardViewMode, raceClass, selectedPilot],
   );
 
   const stats = useApi<PilotStatsResponse>(
@@ -226,7 +229,15 @@ export function PilotStatsPage() {
           onDateChange={(value) => {
             setLeaderboardDate(value);
             setLeaderboardViewMode("current");
+            setLeaderboardChangeReferenceDate("");
           }}
+          onDateReset={() => {
+            setLeaderboardDate("");
+            setLeaderboardChangeReferenceDate("");
+            setLeaderboardViewMode("current");
+          }}
+          changeReferenceDate={leaderboardChangeReferenceDate}
+          onChangeReferenceDate={setLeaderboardChangeReferenceDate}
           onViewModeChange={setLeaderboardViewMode}
         />
       ) : null}

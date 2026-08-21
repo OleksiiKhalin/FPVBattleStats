@@ -6,6 +6,9 @@ type Props = {
   data: GlobalLeaderboardResponse;
   selectedPilot: string;
   onDateChange: (value: string) => void;
+  onDateReset: () => void;
+  changeReferenceDate: string;
+  onChangeReferenceDate: (value: string) => void;
   onViewModeChange: (value: "current" | "probable") => void;
 };
 
@@ -59,8 +62,8 @@ function compareRows(left: GlobalLeaderboardRow, right: GlobalLeaderboardRow, ke
   if (key === "current_league" || key === "projected_next_season_league") {
     const leftLeague = Number(valueFor(left, key));
     const rightLeague = Number(valueFor(right, key));
-    const leftRank = key === "current_league" ? left.rank : left.projected_next_season_rank;
-    const rightRank = key === "current_league" ? right.rank : right.projected_next_season_rank;
+    const leftRank = key === "current_league" ? left.season_start_rank : left.projected_next_season_rank;
+    const rightRank = key === "current_league" ? right.season_start_rank : right.projected_next_season_rank;
     const leagueResult = leftLeague - rightLeague;
     const rankResult = (leftRank ?? Number.POSITIVE_INFINITY) - (rightRank ?? Number.POSITIVE_INFINITY);
     return (leagueResult || rankResult || left.pilot.localeCompare(right.pilot)) * (direction === "asc" ? 1 : -1);
@@ -80,7 +83,15 @@ function leagueClass(league: string | null) {
   return `league-pill league-${league ?? "candidate"}`;
 }
 
-export function GlobalLeaderboardPanel({ data, selectedPilot, onDateChange, onViewModeChange }: Props) {
+export function GlobalLeaderboardPanel({
+  data,
+  selectedPilot,
+  onDateChange,
+  onDateReset,
+  changeReferenceDate,
+  onChangeReferenceDate,
+  onViewModeChange,
+}: Props) {
   const [statusFilter, setStatusFilter] = useState("all");
   const [leagueFilter, setLeagueFilter] = useState("all");
   const [forecastMode, setForecastMode] = useState<ForecastMode>("monthly");
@@ -104,6 +115,9 @@ export function GlobalLeaderboardPanel({ data, selectedPilot, onDateChange, onVi
   );
   const focus = data.selected_pilot ?? data.rows.find((row) => row.pilot === selectedPilot) ?? null;
   const forecast = focus ? focus[forecastMode === "weekly" ? "forecast_weekly" : "forecast_monthly"] : null;
+  const today = new Date().toISOString().slice(0, 10);
+  const changeReferenceMax = [today, data.as_of_date, data.latest_data_date ?? today].sort()[0];
+  const displayedChangeReferenceDate = changeReferenceDate || data.change_reference_date || "";
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -167,6 +181,12 @@ export function GlobalLeaderboardPanel({ data, selectedPilot, onDateChange, onVi
                 <span>Leaderboard date</span>
                 <input type="date" value={data.as_of_date} max={data.latest_data_date ?? undefined} onChange={(event) => onDateChange(event.target.value)} />
               </label>
+              <button type="button" className="chip" onClick={onDateReset}>Today / latest</button>
+              <label className="date-selector">
+                <span>Change reference</span>
+                <input type="date" value={displayedChangeReferenceDate} max={changeReferenceMax} onChange={(event) => onChangeReferenceDate(event.target.value)} />
+              </label>
+              <button type="button" className="chip" onClick={() => onChangeReferenceDate("")}>Reset change</button>
               {data.is_historical ? (
                 <p className="history-note">Historical slice: results after {data.as_of_date} are excluded. Current gap is shown only as a reference and does not affect this ranking.</p>
               ) : null}
@@ -180,6 +200,12 @@ export function GlobalLeaderboardPanel({ data, selectedPilot, onDateChange, onVi
                 <span>Leaderboard date</span>
                 <input type="date" value={data.as_of_date} max={data.latest_data_date ?? undefined} onChange={(event) => onDateChange(event.target.value)} />
               </label>
+              <button type="button" className="chip" onClick={onDateReset}>Today / latest</button>
+              <label className="date-selector">
+                <span>Change reference</span>
+                <input type="date" value={displayedChangeReferenceDate} max={changeReferenceMax} onChange={(event) => onChangeReferenceDate(event.target.value)} />
+              </label>
+              <button type="button" className="chip" onClick={() => onChangeReferenceDate("")}>Reset change</button>
               {data.is_historical ? <p className="history-note">Historical slice: results after {data.as_of_date} are excluded. Current gap is shown only as a reference and does not affect this ranking.</p> : null}
             </div>
           </>
