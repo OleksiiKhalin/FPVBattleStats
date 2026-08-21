@@ -147,8 +147,20 @@ class AnalyticsService:
             difference_percent = None
             timed_rows = [row for row in rows if row["time"] is not None]
             leader_time = min((row["time"] for row in timed_rows), default=None)
+            top_three_times = sorted(row["time"] for row in timed_rows)[:3]
+            top_three_average = sum(top_three_times) / len(top_three_times) if top_three_times else None
             primary_gap_to_leader = round(primary_time - leader_time, 3) if primary_time is not None and leader_time is not None else None
             opponent_gap_to_leader = round(opponent_time - leader_time, 3) if opponent_time is not None and leader_time is not None else None
+            primary_gap_to_leader_percentage = (
+                round(((primary_time - top_three_average) / top_three_average) * 100, 3)
+                if primary_time is not None and top_three_average not in (None, 0)
+                else None
+            )
+            opponent_gap_to_leader_percentage = (
+                round(((opponent_time - top_three_average) / top_three_average) * 100, 3)
+                if opponent_time is not None and top_three_average not in (None, 0)
+                else None
+            )
             if primary_time is not None and opponent_time is not None:
                 shared_days += 1
                 difference_seconds = round(opponent_time - primary_time, 3)
@@ -165,6 +177,8 @@ class AnalyticsService:
                     "difference_percent": difference_percent,
                     "primary_gap_to_leader": primary_gap_to_leader,
                     "opponent_gap_to_leader": opponent_gap_to_leader,
+                    "primary_gap_to_leader_percentage": primary_gap_to_leader_percentage,
+                    "opponent_gap_to_leader_percentage": opponent_gap_to_leader_percentage,
                     "primary_place": primary_row["place"] if primary_row else None,
                     "opponent_place": opponent_row["place"] if opponent_row else None,
                 },

@@ -62,6 +62,8 @@ class PilotComparisonDay(BaseModel):
     difference_percent: float | None = None
     primary_gap_to_leader: float | None = None
     opponent_gap_to_leader: float | None = None
+    primary_gap_to_leader_percentage: float | None = None
+    opponent_gap_to_leader_percentage: float | None = None
     primary_place: int | None = None
     opponent_place: int | None = None
 

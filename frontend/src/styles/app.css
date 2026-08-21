@@ -419,6 +419,15 @@ h3 {
   line-height: 1.45;
 }
 
+.comparison-chart-controls {
+  margin: 12px 0;
+}
+
+.comparison-gap-chart {
+  width: 100%;
+  min-height: 380px;
+}
+
 .stat-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

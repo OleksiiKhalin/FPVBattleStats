@@ -271,6 +271,8 @@ export type PilotComparisonDay = {
   difference_percent: number | null;
   primary_gap_to_leader: number | null;
   opponent_gap_to_leader: number | null;
+  primary_gap_to_leader_percentage: number | null;
+  opponent_gap_to_leader_percentage: number | null;
   primary_place: number | null;
   opponent_place: number | null;
 };
