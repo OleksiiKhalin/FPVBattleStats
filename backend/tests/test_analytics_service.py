@@ -21,14 +21,18 @@ def _seed_result(
     place: int,
     country: str = "US",
 ) -> None:
-    day_spec = DaySpecModel(
-        date=race_date,
-        race_class=race_class,
-        track=f"Track {race_date.isoformat()}",
-        quad_of_the_day=None,
-        season=race_date.strftime("%Y-%m"),
-    )
-    session.add(day_spec)
+    day_spec = session.execute(
+        select(DaySpecModel).where(DaySpecModel.date == race_date, DaySpecModel.race_class == race_class),
+    ).scalar_one_or_none()
+    if day_spec is None:
+        day_spec = DaySpecModel(
+            date=race_date,
+            race_class=race_class,
+            track=f"Track {race_date.isoformat()}",
+            quad_of_the_day=None,
+            season=race_date.strftime("%Y-%m"),
+        )
+        session.add(day_spec)
     pilot = session.execute(select(PilotModel).where(PilotModel.pilot == pilot_name)).scalar_one_or_none()
     if pilot is None:
         pilot = PilotModel(pilot=pilot_name, country=country)
@@ -97,6 +101,68 @@ def test_consistency_ignores_date_filters_and_uses_full_history() -> None:
     improvements = {row["pilot"]: row["improvement_score"] for row in full_range["best_improvement"]}
     assert improvements["Improver"] > 0
 
+    session.close()
+
+
+def test_general_day_streaks_and_days_flown_are_all_time_and_class_specific() -> None:
+    engine = create_db_engine("sqlite:///:memory:")
+    init_db(engine)
+    session = create_session_factory(engine)()
+
+    cutoff = date.today() - timedelta(days=1)
+    for offset in range(4, -1, -1):
+        _seed_result(session, race_date=cutoff - timedelta(days=offset), race_class="open", pilot_name="Active", place=1)
+    for offset in range(20, 16, -1):
+        _seed_result(session, race_date=cutoff - timedelta(days=offset), race_class="open", pilot_name="Tie Pilot", place=2)
+    for offset in range(4, 0, -1):
+        _seed_result(session, race_date=cutoff - timedelta(days=offset), race_class="open", pilot_name="Tie Pilot", place=2)
+    for offset in (2, 1):
+        _seed_result(session, race_date=cutoff - timedelta(days=offset), race_class="open", pilot_name="Short Run", place=3)
+    for offset in range(7, -1, -1):
+        _seed_result(session, race_date=cutoff - timedelta(days=offset), race_class="open", pilot_name="Eight Days", place=4)
+    for offset in range(10, -1, -1):
+        _seed_result(session, race_date=cutoff - timedelta(days=offset), race_class="open", pilot_name="Eleven Days", place=5)
+    _seed_result(session, race_date=date.today(), race_class="open", pilot_name="Today Only", place=6)
+    _seed_result(session, race_date=cutoff, race_class="whoop", pilot_name="Whoop Pilot", place=1)
+    session.commit()
+
+    service = AnalyticsService(session)
+    response = service.get_general_stats(
+        race_class="open",
+        date_from=cutoff,
+        date_to=cutoff,
+        selected_pilot="Active",
+    )
+    day_streaks = response["day_streaks"]
+
+    assert day_streaks["active_cutoff_date"] == cutoff
+    assert [row["pilot"] for row in day_streaks["streaks"]] == ["Eleven Days", "Eight Days", "Active", "Tie Pilot"]
+    assert {row["pilot"] for row in day_streaks["streaks"]} == {"Eleven Days", "Eight Days", "Active", "Tie Pilot"}
+    tie_row = next(row for row in day_streaks["streaks"] if row["pilot"] == "Tie Pilot")
+    assert tie_row["length"] == 4
+    assert tie_row["end_date"] == cutoff - timedelta(days=1)
+    assert next(row for row in day_streaks["streaks"] if row["pilot"] == "Active")["is_active"] is True
+    assert tie_row["is_active"] is False
+    assert "Short Run" not in {row["pilot"] for row in day_streaks["streaks"]}
+    assert "Today Only" not in {row["pilot"] for row in day_streaks["days_flown"]}
+    assert day_streaks["days_flown_summary"] == {
+        "total_pilots": 5,
+        "more_than_7_days": 3,
+        "more_than_10_days": 1,
+        "more_than_20_days": 0,
+        "more_than_30_days": 0,
+        "more_than_50_days": 0,
+        "more_than_100_days": 0,
+        "more_than_200_days": 0,
+        "more_than_300_days": 0,
+        "more_than_400_days": 0,
+        "more_than_500_days": 0,
+    }
+
+    all_time_response = service.get_general_stats(race_class="open", date_from=None, date_to=None, selected_pilot=None)
+    assert all_time_response["day_streaks"] == day_streaks
+    whoop_response = service.get_general_stats(race_class="whoop", date_from=None, date_to=None, selected_pilot=None)
+    assert [row["pilot"] for row in whoop_response["day_streaks"]["days_flown"]] == ["Whoop Pilot"]
     session.close()
 
 

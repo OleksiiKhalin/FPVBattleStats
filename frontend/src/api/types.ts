@@ -142,6 +142,45 @@ export type ConsistencyRow = {
   improvement_score: number | null;
 };
 
+export type DayStreakRow = {
+  pilot: string;
+  country: string | null;
+  start_date: string;
+  end_date: string;
+  length: number;
+  dates: string[];
+  is_active: boolean;
+};
+
+export type DaysFlownRow = {
+  pilot: string;
+  country: string | null;
+  days_flown: number;
+  first_flight_date: string;
+  last_flight_date: string;
+};
+
+export type DaysFlownSummary = {
+  total_pilots: number;
+  more_than_7_days: number;
+  more_than_10_days: number;
+  more_than_20_days: number;
+  more_than_30_days: number;
+  more_than_50_days: number;
+  more_than_100_days: number;
+  more_than_200_days: number;
+  more_than_300_days: number;
+  more_than_400_days: number;
+  more_than_500_days: number;
+};
+
+export type DayStreakStats = {
+  active_cutoff_date: string | null;
+  streaks: DayStreakRow[];
+  days_flown: DaysFlownRow[];
+  days_flown_summary: DaysFlownSummary;
+};
+
 export type GeneralStatsResponse = {
   race_class: string;
   date_from: string | null;
@@ -171,6 +210,7 @@ export type GeneralStatsResponse = {
   selected_pilot_consistency: ConsistencyRow | null;
   consistency_leaderboard: ConsistencyRow[];
   best_improvement: ConsistencyRow[];
+  day_streaks: DayStreakStats;
 };
 
 export type GlobalLeaderboardForecast = {

@@ -15,7 +15,9 @@ import { RangeQuickFilters } from "../components/RangeQuickFilters";
 import { usePilot } from "../context/PilotContext";
 import { useApi } from "../hooks/useApi";
 
-type GeneralSection = "countries" | "quads" | "tracks" | "seasons" | "participation" | "easy-days" | "consistency";
+type GeneralSection = "countries" | "quads" | "tracks" | "seasons" | "participation" | "easy-days" | "consistency" | "day-streaks";
+type DayStreakView = "streaks" | "days-flown";
+type StreakFilter = "all" | "active" | "inactive";
 type SortDirection = "asc" | "desc";
 type CountrySortKey = keyof Pick<CountryStatsRow, "country" | "unique_pilots" | "avg_season_score" | "avg_place" | "season_wins" | "medals_per_pilot">;
 type QuadSortKey = keyof Pick<QuadStatsRow, "quad" | "category" | "entries" | "usage_percentage" | "unique_pilots" | "avg_place" | "wins">;
@@ -80,6 +82,8 @@ export function GeneralStatsPage() {
   const [dateFrom, setDateFrom] = useState(searchParams.get("from") ?? DEFAULT_FROM);
   const [dateTo, setDateTo] = useState(searchParams.get("to") ?? DEFAULT_TO);
   const [section, setSection] = useState<GeneralSection>((searchParams.get("section") as GeneralSection | null) ?? "countries");
+  const [dayStreakView, setDayStreakView] = useState<DayStreakView>(searchParams.get("streak_view") === "days-flown" ? "days-flown" : "streaks");
+  const [streakFilter, setStreakFilter] = useState<StreakFilter>(searchParams.get("streak_filter") === "active" || searchParams.get("streak_filter") === "inactive" ? searchParams.get("streak_filter") as StreakFilter : "all");
   const [consistentPilotsOnly, setConsistentPilotsOnly] = useState(searchParams.get("consistent") === "true");
   const [seasonScope, setSeasonScope] = useState("");
   const [countrySort, setCountrySort] = useState<{ key: CountrySortKey; direction: SortDirection }>({ key: "unique_pilots", direction: "desc" });
@@ -100,8 +104,12 @@ export function GeneralStatsPage() {
     if (dateFrom) params.set("from", dateFrom);
     if (dateTo) params.set("to", dateTo);
     if (consistentPilotsOnly) params.set("consistent", "true");
+    if (section === "day-streaks") {
+      if (dayStreakView !== "streaks") params.set("streak_view", dayStreakView);
+      if (streakFilter !== "all") params.set("streak_filter", streakFilter);
+    }
     if (params.toString() !== searchParams.toString()) setSearchParams(params, { replace: true });
-  }, [consistentPilotsOnly, dateFrom, dateTo, pilotFromQuery, raceClass, searchParams, section, selectedPilot, setSearchParams]);
+  }, [consistentPilotsOnly, dateFrom, dateTo, dayStreakView, pilotFromQuery, raceClass, searchParams, section, selectedPilot, setSearchParams, streakFilter]);
   const stats = useApi<GeneralStatsResponse>(
     () => fetchJson(buildGeneralStatsPath(raceClass, dateFrom, dateTo, selectedPilot, consistentPilotsOnly)),
     [raceClass, dateFrom, dateTo, selectedPilot, consistentPilotsOnly],
@@ -115,6 +123,7 @@ export function GeneralStatsPage() {
     participation: "Participation",
     "easy-days": "Easy Days",
     consistency: "Consistency",
+    "day-streaks": "Day Streaks",
   };
 
   const countryRows = useMemo(() => (stats.data ? sortRows(stats.data.countries, countrySort.key, countrySort.direction) : []), [stats.data, countrySort]);
@@ -123,6 +132,13 @@ export function GeneralStatsPage() {
   const seasonRows = useMemo(() => (stats.data ? sortRows(stats.data.seasons, seasonSort.key, seasonSort.direction) : []), [stats.data, seasonSort]);
   const consistencyRows = useMemo(() => (stats.data ? sortRows(stats.data.consistency_leaderboard, consistencySort.key, consistencySort.direction) : []), [stats.data, consistencySort]);
   const improvementRows = useMemo(() => (stats.data ? sortRows(stats.data.best_improvement, improvementSort.key, improvementSort.direction) : []), [stats.data, improvementSort]);
+  const visibleStreakRows = useMemo(() => {
+    const rows = stats.data?.day_streaks.streaks ?? [];
+    if (streakFilter === "active") return rows.filter((row) => row.is_active);
+    if (streakFilter === "inactive") return rows.filter((row) => !row.is_active);
+    return rows;
+  }, [stats.data, streakFilter]);
+  const dayStreakStats = stats.data?.day_streaks;
 
   return (
     <div className="stack">
@@ -334,6 +350,63 @@ export function GeneralStatsPage() {
           </section>
         </div>;
       })() : null}
+      {dayStreakStats && section === "day-streaks" ? (
+        <section className="panel day-streaks-panel">
+          <div className="panel-header">
+            <div><p className="eyebrow">Day Streaks</p><h2>{dayStreakView === "streaks" ? "Longest consecutive participation" : "Days flown leaderboard"}</h2></div>
+            <div className="meta"><span>All-time in the selected class.</span><span>Completed through {dayStreakStats.active_cutoff_date ?? "-"}.</span></div>
+          </div>
+          <div className="toggle-row day-streak-controls">
+            <button type="button" className={dayStreakView === "streaks" ? "chip active" : "chip"} onClick={() => setDayStreakView("streaks")}>Best Streaks</button>
+            <button type="button" className={dayStreakView === "days-flown" ? "chip active" : "chip"} onClick={() => setDayStreakView("days-flown")}>Days Flown</button>
+            {dayStreakView === "streaks" ? <>
+              <span className="control-divider" />
+              {(["all", "active", "inactive"] as StreakFilter[]).map((filter) => (
+                <button type="button" className={streakFilter === filter ? "chip active" : "chip"} onClick={() => setStreakFilter(filter)} key={filter}>
+                  {filter[0].toUpperCase() + filter.slice(1)}
+                </button>
+              ))}
+            </> : null}
+          </div>
+
+          {dayStreakView === "streaks" ? (
+            <div className="streak-leaderboard">
+              {visibleStreakRows.length === 0 ? <p>No qualifying streaks match this filter.</p> : null}
+              {visibleStreakRows.map((streak, index) => (
+                <article className={`streak-leaderboard-row ${streak.is_active ? "streak-active" : "streak-inactive"} ${streak.pilot === selectedPilot ? "selected-row" : ""}`} key={streak.pilot}>
+                  <div className="streak-leaderboard-header">
+                    <div><h3>{index + 1}. {streak.pilot}</h3><span className="table-muted">{streak.country ?? "Unknown"}</span></div>
+                    <div className="streak-leaderboard-meta"><span>{streak.start_date} to {streak.end_date}</span><strong>{streak.length} days</strong><span className="streak-status">{streak.is_active ? "Active" : "Inactive"}</span></div>
+                  </div>
+                  <div className="streak-cells">
+                    {streak.dates.map((raceDate) => <span className="streak-cell" title={raceDate} key={raceDate} />)}
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <>
+              <div className="stat-grid days-flown-summary">
+                <div className="stat-card"><span>Total pilots</span><strong>{dayStreakStats.days_flown_summary.total_pilots}</strong></div>
+                {[7, 10, 20, 30, 50, 100, 200, 300, 400, 500].map((threshold) => (
+                  <div className="stat-card" key={threshold}><span>More than {threshold} days</span><strong>{dayStreakStats.days_flown_summary[`more_than_${threshold}_days` as keyof typeof dayStreakStats.days_flown_summary]}</strong></div>
+                ))}
+              </div>
+              <div className="table-scroll">
+                <table className="scoreboard">
+                  <thead><tr><th>Rank</th><th>Pilot</th><th>Country</th><th>Days flown</th><th>First flight</th><th>Last flight</th></tr></thead>
+                  <tbody>{dayStreakStats.days_flown.map((row, index) => (
+                    <tr key={row.pilot} className={row.pilot === selectedPilot ? "active-row" : undefined}>
+                      <td>{index + 1}</td><td>{row.pilot}</td><td>{row.country ?? "-"}</td><td>{row.days_flown}</td><td>{row.first_flight_date}</td><td>{row.last_flight_date}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            </>
+          )}
+          <p className="chart-note">Streaks require at least three consecutive calendar days. Active means the selected pilot’s best streak reaches the latest completed stored day; inactive streaks are greyed out. Days flown counts one result per race day and excludes today.</p>
+        </section>
+      ) : null}
       {stats.data && section === "consistency" ? (
         <div className="stack">
           <section className="panel">

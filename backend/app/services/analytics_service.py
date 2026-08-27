@@ -346,6 +346,7 @@ class AnalyticsService:
         season_rows = self._season_rows_by_day(latest_season_day_ids)
         full_history_rows = self._results_with_dates(race_class=race_class)
         consistency_rows = self._build_consistency_rows(full_history_rows)
+        day_streak_stats = self._build_day_streak_stats(full_history_rows)
 
         return {
             "race_class": race_class,
@@ -368,6 +369,7 @@ class AnalyticsService:
                     reverse=True,
                 )[:15]
             ],
+            "day_streaks": day_streak_stats,
         }
 
 
@@ -791,6 +793,85 @@ class AnalyticsService:
                 },
             )
         return sorted(rows, key=lambda row: (-row["consistency_score"], row["average_place"] or 999, row["pilot"]))
+
+    def _build_day_streak_stats(self, rows_with_dates: list[dict]) -> dict:
+        if not rows_with_dates:
+            return {
+                "active_cutoff_date": None,
+                "streaks": [],
+                "days_flown": [],
+                "days_flown_summary": self._build_days_flown_summary([]),
+            }
+
+        latest_stored_date = max(row["date"] for row in rows_with_dates)
+        active_cutoff_date = min(latest_stored_date, date.today() - timedelta(days=1))
+        dates_by_pilot: dict[str, set[date]] = defaultdict(set)
+        country_by_pilot: dict[str, str | None] = {}
+        for row in rows_with_dates:
+            if row["date"] > active_cutoff_date:
+                continue
+            dates_by_pilot[row["pilot"]].add(row["date"])
+            country_by_pilot.setdefault(row["pilot"], row["country"])
+
+        streak_rows: list[dict] = []
+        days_flown_rows: list[dict] = []
+        for pilot, pilot_dates in dates_by_pilot.items():
+            dates = sorted(pilot_dates)
+            runs = self._date_runs(dates)
+            qualifying_runs = [run for run in runs if len(run) >= 3]
+            if qualifying_runs:
+                best_run = max(qualifying_runs, key=lambda run: (len(run), run[-1]))
+                streak_rows.append(
+                    {
+                        "pilot": pilot,
+                        "country": country_by_pilot[pilot],
+                        "start_date": best_run[0],
+                        "end_date": best_run[-1],
+                        "length": len(best_run),
+                        "dates": best_run,
+                        "is_active": best_run[-1] == active_cutoff_date,
+                    },
+                )
+            days_flown_rows.append(
+                {
+                    "pilot": pilot,
+                    "country": country_by_pilot[pilot],
+                    "days_flown": len(dates),
+                    "first_flight_date": dates[0],
+                    "last_flight_date": dates[-1],
+                },
+            )
+
+        streak_rows.sort(key=lambda row: (-row["length"], row["pilot"]))
+        days_flown_rows.sort(key=lambda row: (-row["days_flown"], row["pilot"]))
+        return {
+            "active_cutoff_date": active_cutoff_date,
+            "streaks": streak_rows,
+            "days_flown": days_flown_rows,
+            "days_flown_summary": self._build_days_flown_summary(days_flown_rows),
+        }
+
+    @staticmethod
+    def _date_runs(dates: list[date]) -> list[list[date]]:
+        runs: list[list[date]] = []
+        current: list[date] = []
+        for race_date in dates:
+            if not current or race_date == current[-1] + timedelta(days=1):
+                current.append(race_date)
+                continue
+            runs.append(current)
+            current = [race_date]
+        if current:
+            runs.append(current)
+        return runs
+
+    @staticmethod
+    def _build_days_flown_summary(rows: list[dict]) -> dict:
+        thresholds = (7, 10, 20, 30, 50, 100, 200, 300, 400, 500)
+        summary = {"total_pilots": len(rows)}
+        for threshold in thresholds:
+            summary[f"more_than_{threshold}_days"] = sum(row["days_flown"] > threshold for row in rows)
+        return summary
 
     def _mean_absolute_deviation(self, values: list[int]) -> float:
         if not values:

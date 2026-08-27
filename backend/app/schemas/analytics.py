@@ -189,6 +189,45 @@ class ConsistencyRow(BaseModel):
     improvement_score: float | None = None
 
 
+class DayStreakRow(BaseModel):
+    pilot: str
+    country: str | None = None
+    start_date: date
+    end_date: date
+    length: int
+    dates: list[date]
+    is_active: bool
+
+
+class DaysFlownRow(BaseModel):
+    pilot: str
+    country: str | None = None
+    days_flown: int
+    first_flight_date: date
+    last_flight_date: date
+
+
+class DaysFlownSummary(BaseModel):
+    total_pilots: int
+    more_than_7_days: int
+    more_than_10_days: int
+    more_than_20_days: int
+    more_than_30_days: int
+    more_than_50_days: int
+    more_than_100_days: int
+    more_than_200_days: int
+    more_than_300_days: int
+    more_than_400_days: int
+    more_than_500_days: int
+
+
+class DayStreakStats(BaseModel):
+    active_cutoff_date: date | None = None
+    streaks: list[DayStreakRow]
+    days_flown: list[DaysFlownRow]
+    days_flown_summary: DaysFlownSummary
+
+
 class GeneralStatsResponse(BaseModel):
     race_class: str
     date_from: date | None = None
@@ -203,6 +242,7 @@ class GeneralStatsResponse(BaseModel):
     selected_pilot_consistency: ConsistencyRow | None = None
     consistency_leaderboard: list[ConsistencyRow]
     best_improvement: list[ConsistencyRow]
+    day_streaks: DayStreakStats
 
 
 class GlobalLeaderboardForecast(BaseModel):
