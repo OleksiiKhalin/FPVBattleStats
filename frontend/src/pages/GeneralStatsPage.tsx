@@ -265,10 +265,11 @@ export function GeneralStatsPage() {
   const stats = useApi<GeneralStatsResponse>(
     () => fetchJson(buildGeneralStatsPath(raceClass, dateFrom, dateTo, selectedPilot, consistentPilotsOnly)),
     [raceClass, dateFrom, dateTo, selectedPilot, consistentPilotsOnly],
+    section !== "progress-correlation",
   );
   const correlation = useApi<ProgressCorrelationResponse>(
-    () => fetchJson(`/analytics/progress-correlation/${raceClass}?${new URLSearchParams({ gap_from: correlationFrom, pilot_name: selectedPilot }).toString()}`),
-    [correlationFrom, raceClass, selectedPilot],
+    () => fetchJson(`/analytics/progress-correlation/${raceClass}?${new URLSearchParams({ gap_from: correlationFrom }).toString()}`),
+    [correlationFrom, raceClass],
   );
 
   const sectionLabel = {
@@ -313,10 +314,20 @@ export function GeneralStatsPage() {
     },
     [correlationData, experienceLimit],
   );
+  const visibleCorrelationPointsByPilot = useMemo(() => {
+    const pointsByPilot = new Map<string, ProgressCorrelationResponse["points"]>();
+    for (const point of visibleCorrelationPoints) {
+      const pilotPoints = pointsByPilot.get(point.pilot) ?? [];
+      pilotPoints.push(point);
+      pointsByPilot.set(point.pilot, pilotPoints);
+    }
+    return pointsByPilot;
+  }, [visibleCorrelationPoints]);
   const viewportCorrelationPoints = useMemo(
-    () => visibleCorrelationPoints.filter((point) => point.pilot === selectedPilot),
-    [selectedPilot, visibleCorrelationPoints],
+    () => visibleCorrelationPointsByPilot.get(selectedPilot) ?? [],
+    [selectedPilot, visibleCorrelationPointsByPilot],
   );
+  const visibleCorrelationPilotCount = visibleCorrelationPointsByPilot.size;
   const correlationPearson = useMemo(() => calculatePearson(visibleCorrelationPoints), [visibleCorrelationPoints]);
   const correlationTrend = useMemo(() => buildLinearTrend(visibleCorrelationPoints, "Population linear model"), [visibleCorrelationPoints]);
   const viewportCorrelationTrend = useMemo(() => buildLinearTrend(viewportCorrelationPoints, `${selectedPilot} linear model`), [selectedPilot, viewportCorrelationPoints]);
@@ -642,7 +653,7 @@ export function GeneralStatsPage() {
             <label className="field correlation-date-field"><span>Gap data from</span><input type="date" value={correlationFrom} onChange={(event) => setCorrelationFrom(event.target.value)} /></label>
           </div>
           <div className="stat-grid correlation-summary">
-            <div className="stat-card"><span>Pilots in visible range</span><strong>{new Set(visibleCorrelationPoints.map((point) => point.pilot)).size}</strong></div>
+            <div className="stat-card"><span>Pilots in visible range</span><strong>{visibleCorrelationPilotCount}</strong></div>
             <div className="stat-card"><span>Observations in visible range</span><strong>{visibleCorrelationPoints.length}</strong></div>
             <div className="stat-card"><span>Pearson correlation</span><strong>{correlationPearson ?? "-"}</strong><small className="stat-card-note">{describeCorrelation(correlationPearson)}</small></div>
             <div className="stat-card"><span>Completed through</span><strong>{correlationData.completed_through ?? "-"}</strong></div>
