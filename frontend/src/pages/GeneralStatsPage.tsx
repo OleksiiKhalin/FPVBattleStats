@@ -17,7 +17,7 @@ import { useApi } from "../hooks/useApi";
 
 type GeneralSection = "countries" | "quads" | "tracks" | "seasons" | "participation" | "easy-days" | "consistency" | "day-streaks";
 type DayStreakView = "streaks" | "days-flown";
-type StreakFilter = "all" | "active" | "inactive";
+type StreakMode = "best" | "best-active" | "all";
 type SortDirection = "asc" | "desc";
 type CountrySortKey = keyof Pick<CountryStatsRow, "country" | "unique_pilots" | "avg_season_score" | "avg_place" | "season_wins" | "medals_per_pilot">;
 type QuadSortKey = keyof Pick<QuadStatsRow, "quad" | "category" | "entries" | "usage_percentage" | "unique_pilots" | "avg_place" | "wins">;
@@ -75,6 +75,10 @@ function toggleSort<T extends string>(
   setState({ key: nextKey, direction: nextKey === "country" || nextKey === "pilot" || nextKey === "track" || nextKey === "season" ? "asc" : "desc" });
 }
 
+function readStreakMode(value: string | null): StreakMode {
+  return value === "best-active" || value === "all" ? value : "best";
+}
+
 export function GeneralStatsPage() {
   const { selectedPilot } = usePilot();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -83,7 +87,7 @@ export function GeneralStatsPage() {
   const [dateTo, setDateTo] = useState(searchParams.get("to") ?? DEFAULT_TO);
   const [section, setSection] = useState<GeneralSection>((searchParams.get("section") as GeneralSection | null) ?? "countries");
   const [dayStreakView, setDayStreakView] = useState<DayStreakView>(searchParams.get("streak_view") === "days-flown" ? "days-flown" : "streaks");
-  const [streakFilter, setStreakFilter] = useState<StreakFilter>(searchParams.get("streak_filter") === "active" || searchParams.get("streak_filter") === "inactive" ? searchParams.get("streak_filter") as StreakFilter : "all");
+  const [streakMode, setStreakMode] = useState<StreakMode>(readStreakMode(searchParams.get("streak_mode")));
   const [consistentPilotsOnly, setConsistentPilotsOnly] = useState(searchParams.get("consistent") === "true");
   const [seasonScope, setSeasonScope] = useState("");
   const [countrySort, setCountrySort] = useState<{ key: CountrySortKey; direction: SortDirection }>({ key: "unique_pilots", direction: "desc" });
@@ -106,10 +110,10 @@ export function GeneralStatsPage() {
     if (consistentPilotsOnly) params.set("consistent", "true");
     if (section === "day-streaks") {
       if (dayStreakView !== "streaks") params.set("streak_view", dayStreakView);
-      if (streakFilter !== "all") params.set("streak_filter", streakFilter);
+      if (streakMode !== "best") params.set("streak_mode", streakMode);
     }
     if (params.toString() !== searchParams.toString()) setSearchParams(params, { replace: true });
-  }, [consistentPilotsOnly, dateFrom, dateTo, dayStreakView, pilotFromQuery, raceClass, searchParams, section, selectedPilot, setSearchParams, streakFilter]);
+  }, [consistentPilotsOnly, dateFrom, dateTo, dayStreakView, pilotFromQuery, raceClass, searchParams, section, selectedPilot, setSearchParams, streakMode]);
   const stats = useApi<GeneralStatsResponse>(
     () => fetchJson(buildGeneralStatsPath(raceClass, dateFrom, dateTo, selectedPilot, consistentPilotsOnly)),
     [raceClass, dateFrom, dateTo, selectedPilot, consistentPilotsOnly],
@@ -134,10 +138,10 @@ export function GeneralStatsPage() {
   const improvementRows = useMemo(() => (stats.data ? sortRows(stats.data.best_improvement, improvementSort.key, improvementSort.direction) : []), [stats.data, improvementSort]);
   const visibleStreakRows = useMemo(() => {
     const rows = stats.data?.day_streaks.streaks ?? [];
-    if (streakFilter === "active") return rows.filter((row) => row.is_active);
-    if (streakFilter === "inactive") return rows.filter((row) => !row.is_active);
+    if (streakMode === "best") return rows.filter((row) => row.is_best);
+    if (streakMode === "best-active") return rows.filter((row) => row.is_best || row.is_active);
     return rows;
-  }, [stats.data, streakFilter]);
+  }, [stats.data, streakMode]);
   const dayStreakStats = stats.data?.day_streaks;
 
   return (
@@ -361,9 +365,9 @@ export function GeneralStatsPage() {
             <button type="button" className={dayStreakView === "days-flown" ? "chip active" : "chip"} onClick={() => setDayStreakView("days-flown")}>Days Flown</button>
             {dayStreakView === "streaks" ? <>
               <span className="control-divider" />
-              {(["all", "active", "inactive"] as StreakFilter[]).map((filter) => (
-                <button type="button" className={streakFilter === filter ? "chip active" : "chip"} onClick={() => setStreakFilter(filter)} key={filter}>
-                  {filter[0].toUpperCase() + filter.slice(1)}
+              {(["best", "best-active", "all"] as StreakMode[]).map((mode) => (
+                <button type="button" className={streakMode === mode ? "chip active" : "chip"} onClick={() => setStreakMode(mode)} key={mode}>
+                  {mode === "best" ? "Best only" : mode === "best-active" ? "Best + active" : "All streaks"}
                 </button>
               ))}
             </> : null}
@@ -371,12 +375,12 @@ export function GeneralStatsPage() {
 
           {dayStreakView === "streaks" ? (
             <div className="streak-leaderboard">
-              {visibleStreakRows.length === 0 ? <p>No qualifying streaks match this filter.</p> : null}
+              {visibleStreakRows.length === 0 ? <p>No qualifying streaks match this mode.</p> : null}
               {visibleStreakRows.map((streak, index) => (
-                <article className={`streak-leaderboard-row ${streak.is_active ? "streak-active" : "streak-inactive"} ${streak.pilot === selectedPilot ? "selected-row" : ""}`} key={streak.pilot}>
+                <article className={`streak-leaderboard-row ${streak.is_active ? "streak-active" : "streak-inactive"} ${streak.pilot === selectedPilot ? "selected-row" : ""}`} key={`${streak.pilot}-${streak.start_date}`}>
                   <div className="streak-leaderboard-header">
                     <div><h3>{index + 1}. {streak.pilot}</h3><span className="table-muted">{streak.country ?? "Unknown"}</span></div>
-                    <div className="streak-leaderboard-meta"><span>{streak.start_date} to {streak.end_date}</span><strong>{streak.length} days</strong><span className="streak-status">{streak.is_active ? "Active" : "Inactive"}</span></div>
+                    <div className="streak-leaderboard-meta"><span>{streak.start_date} to {streak.end_date}</span><strong>{streak.length} days</strong><span className="streak-role">{streak.is_best && streak.is_active ? "Best & Active" : streak.is_best ? "Best" : "Active"}</span></div>
                   </div>
                   <div className="streak-cells">
                     {streak.dates.map((raceDate) => <span className="streak-cell" title={raceDate} key={raceDate} />)}

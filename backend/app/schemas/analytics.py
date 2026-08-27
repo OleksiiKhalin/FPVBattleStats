@@ -196,6 +196,7 @@ class DayStreakRow(BaseModel):
     end_date: date
     length: int
     dates: list[date]
+    is_best: bool
     is_active: bool
 
 

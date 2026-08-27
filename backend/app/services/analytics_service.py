@@ -821,17 +821,19 @@ class AnalyticsService:
             qualifying_runs = [run for run in runs if len(run) >= 3]
             if qualifying_runs:
                 best_run = max(qualifying_runs, key=lambda run: (len(run), run[-1]))
-                streak_rows.append(
-                    {
-                        "pilot": pilot,
-                        "country": country_by_pilot[pilot],
-                        "start_date": best_run[0],
-                        "end_date": best_run[-1],
-                        "length": len(best_run),
-                        "dates": best_run,
-                        "is_active": best_run[-1] == active_cutoff_date,
-                    },
-                )
+                for run in qualifying_runs:
+                    streak_rows.append(
+                        {
+                            "pilot": pilot,
+                            "country": country_by_pilot[pilot],
+                            "start_date": run[0],
+                            "end_date": run[-1],
+                            "length": len(run),
+                            "dates": run,
+                            "is_best": run == best_run,
+                            "is_active": run[-1] == active_cutoff_date,
+                        },
+                    )
             days_flown_rows.append(
                 {
                     "pilot": pilot,

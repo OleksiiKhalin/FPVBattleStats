@@ -122,6 +122,10 @@ def test_general_day_streaks_and_days_flown_are_all_time_and_class_specific() ->
         _seed_result(session, race_date=cutoff - timedelta(days=offset), race_class="open", pilot_name="Eight Days", place=4)
     for offset in range(10, -1, -1):
         _seed_result(session, race_date=cutoff - timedelta(days=offset), race_class="open", pilot_name="Eleven Days", place=5)
+    for offset in range(30, 25, -1):
+        _seed_result(session, race_date=cutoff - timedelta(days=offset), race_class="open", pilot_name="Split Pilot", place=6)
+    for offset in range(2, -1, -1):
+        _seed_result(session, race_date=cutoff - timedelta(days=offset), race_class="open", pilot_name="Split Pilot", place=6)
     _seed_result(session, race_date=date.today(), race_class="open", pilot_name="Today Only", place=6)
     _seed_result(session, race_date=cutoff, race_class="whoop", pilot_name="Whoop Pilot", place=1)
     session.commit()
@@ -136,18 +140,32 @@ def test_general_day_streaks_and_days_flown_are_all_time_and_class_specific() ->
     day_streaks = response["day_streaks"]
 
     assert day_streaks["active_cutoff_date"] == cutoff
-    assert [row["pilot"] for row in day_streaks["streaks"]] == ["Eleven Days", "Eight Days", "Active", "Tie Pilot"]
-    assert {row["pilot"] for row in day_streaks["streaks"]} == {"Eleven Days", "Eight Days", "Active", "Tie Pilot"}
-    tie_row = next(row for row in day_streaks["streaks"] if row["pilot"] == "Tie Pilot")
-    assert tie_row["length"] == 4
-    assert tie_row["end_date"] == cutoff - timedelta(days=1)
-    assert next(row for row in day_streaks["streaks"] if row["pilot"] == "Active")["is_active"] is True
-    assert tie_row["is_active"] is False
+    assert [row["pilot"] for row in day_streaks["streaks"]] == ["Eleven Days", "Eight Days", "Active", "Split Pilot", "Tie Pilot", "Tie Pilot", "Split Pilot"]
+    tie_rows = [row for row in day_streaks["streaks"] if row["pilot"] == "Tie Pilot"]
+    assert len(tie_rows) == 2
+    tie_best = next(row for row in tie_rows if row["is_best"])
+    tie_old = next(row for row in tie_rows if not row["is_best"])
+    assert tie_best["length"] == 4
+    assert tie_best["end_date"] == cutoff - timedelta(days=1)
+    assert tie_best["is_active"] is False
+    assert tie_old["is_best"] is False
+    active_row = next(row for row in day_streaks["streaks"] if row["pilot"] == "Active")
+    assert active_row["is_best"] is True
+    assert active_row["is_active"] is True
+    split_rows = [row for row in day_streaks["streaks"] if row["pilot"] == "Split Pilot"]
+    split_best = next(row for row in split_rows if row["is_best"])
+    split_active = next(row for row in split_rows if row["is_active"])
+    assert split_best["length"] == 5
+    assert split_best["is_active"] is False
+    assert split_active["length"] == 3
+    assert split_active["is_best"] is False
+    assert [row["pilot"] for row in day_streaks["streaks"] if row["is_best"]] == ["Eleven Days", "Eight Days", "Active", "Split Pilot", "Tie Pilot"]
+    assert [row["pilot"] for row in day_streaks["streaks"] if row["is_best"] or row["is_active"]] == ["Eleven Days", "Eight Days", "Active", "Split Pilot", "Tie Pilot", "Split Pilot"]
     assert "Short Run" not in {row["pilot"] for row in day_streaks["streaks"]}
     assert "Today Only" not in {row["pilot"] for row in day_streaks["days_flown"]}
     assert day_streaks["days_flown_summary"] == {
-        "total_pilots": 5,
-        "more_than_7_days": 3,
+        "total_pilots": 6,
+        "more_than_7_days": 4,
         "more_than_10_days": 1,
         "more_than_20_days": 0,
         "more_than_30_days": 0,

@@ -149,6 +149,7 @@ export type DayStreakRow = {
   end_date: string;
   length: number;
   dates: string[];
+  is_best: boolean;
   is_active: boolean;
 };
 

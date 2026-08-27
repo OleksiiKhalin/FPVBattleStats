@@ -687,12 +687,16 @@ h3 {
   color: var(--text);
 }
 
-.streak-status {
+.streak-role {
+  padding: 3px 8px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
   color: var(--accent);
   font-weight: 600;
+  white-space: nowrap;
 }
 
-.streak-inactive .streak-status {
+.streak-inactive .streak-role {
   color: var(--muted);
 }
 
