@@ -452,6 +452,14 @@ h3 {
   font-size: 1.24rem;
 }
 
+.stat-card-note {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.3;
+}
+
 .global-leaderboard-kpis {
   grid-template-columns: repeat(6, minmax(0, 1fr));
 }
@@ -732,6 +740,14 @@ h3 {
   font-size: 0.84rem;
 }
 
+.chart-control-label {
+  align-self: center;
+  color: var(--muted);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .progress-correlation-chart {
   width: 100%;
   min-height: 430px;
@@ -771,6 +787,10 @@ h3 {
 }
 
 @media (max-width: 760px) {
+  .correlation-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .streak-leaderboard-header {
     align-items: start;
     display: grid;
@@ -783,6 +803,12 @@ h3 {
 
   .control-divider {
     display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .correlation-summary {
+    grid-template-columns: 1fr;
   }
 }
 
