@@ -732,6 +732,19 @@ h3 {
   align-items: center;
 }
 
+.correlation-range-field {
+  min-width: 142px;
+}
+
+.correlation-y-field {
+  min-width: 92px;
+}
+
+.correlation-y-field input,
+.correlation-range-field input {
+  min-width: 0;
+}
+
 .correlation-controls label {
   display: inline-flex;
   align-items: center;
@@ -752,6 +765,14 @@ h3 {
   width: 100%;
   min-height: 430px;
   margin-top: 8px;
+}
+
+.correlation-model-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  color: var(--muted);
+  font-size: 0.82rem;
 }
 
 .correlation-tooltip {

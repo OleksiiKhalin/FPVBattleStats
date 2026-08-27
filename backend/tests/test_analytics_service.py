@@ -217,7 +217,7 @@ def test_progress_correlation_uses_cumulative_experience_and_post_cutoff_gaps() 
     assert all(point["pilot"] != "Today Only" for point in response["points"])
     assert novice_points[0]["gap_percentage"] == 9.091
     average_day_two = next(row for row in response["averages"] if row["days_flown"] == 2)
-    assert average_day_two == {"days_flown": 2, "average_gap_percentage": 3.426, "sample_size": 4}
+    assert average_day_two == {"days_flown": 2, "average_gap_percentage": 3.426, "median_gap_percentage": 3.846, "sample_size": 4}
 
     later_response = AnalyticsService(session).get_progress_correlation(
         race_class="open",
@@ -227,6 +227,32 @@ def test_progress_correlation_uses_cumulative_experience_and_post_cutoff_gaps() 
     later_novice_points = [point for point in later_response["points"] if point["pilot"] == "Novice"]
     assert [point["days_flown"] for point in later_novice_points] == [3]
     assert "Whoop Only" not in {point["pilot"] for point in response["points"]}
+    session.close()
+
+
+def test_progress_correlation_median_handles_odd_sample_groups() -> None:
+    engine = create_db_engine("sqlite:///:memory:")
+    init_db(engine)
+    session = create_session_factory(engine)()
+
+    cutoff = date.today() - timedelta(days=1)
+    gap_start = cutoff - timedelta(days=1)
+    _seed_result(session, race_date=cutoff - timedelta(days=2), race_class="open", pilot_name="A", place=1)
+    for pilot_name, place in (("A", 1), ("B", 2), ("C", 3)):
+        _seed_result(session, race_date=gap_start, race_class="open", pilot_name=pilot_name, place=place)
+    for pilot_name, place in (("A", 3), ("B", 1), ("C", 2)):
+        _seed_result(session, race_date=cutoff, race_class="open", pilot_name=pilot_name, place=place)
+    session.commit()
+
+    response = AnalyticsService(session).get_progress_correlation(
+        race_class="open",
+        gap_from=gap_start,
+        viewport_pilot="A",
+    )
+
+    median_day_two = next(row for row in response["averages"] if row["days_flown"] == 2)
+    assert median_day_two["sample_size"] == 3
+    assert median_day_two["median_gap_percentage"] == -4.545
     session.close()
 
 

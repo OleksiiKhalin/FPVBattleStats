@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 from collections import defaultdict
 from datetime import date, timedelta
+from statistics import median
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -438,6 +439,7 @@ class AnalyticsService:
             {
                 "days_flown": days_flown,
                 "average_gap_percentage": round(sum(values) / len(values), 3),
+                "median_gap_percentage": round(median(values), 3),
                 "sample_size": len(values),
             }
             for days_flown, values in sorted(average_values.items())

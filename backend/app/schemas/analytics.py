@@ -240,6 +240,7 @@ class ProgressCorrelationPoint(BaseModel):
 class ProgressCorrelationAverage(BaseModel):
     days_flown: int
     average_gap_percentage: float
+    median_gap_percentage: float
     sample_size: int
 
 

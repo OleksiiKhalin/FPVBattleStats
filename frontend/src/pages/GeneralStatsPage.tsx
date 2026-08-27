@@ -38,10 +38,15 @@ function CorrelationTooltip({ active, payload }: { active?: boolean; payload?: A
     return null;
   }
   const point = payload[0].payload;
-  const pilot = typeof point.pilot === "string" ? point.pilot : "Population average";
+  const seriesLabel = typeof point.series_label === "string" ? point.series_label : null;
+  const pilot = typeof point.pilot === "string" ? point.pilot : seriesLabel ?? "Population average";
   const date = typeof point.date === "string" ? point.date : null;
   const daysFlown = typeof point.days_flown === "number" ? point.days_flown : null;
-  const gap = typeof point.gap_percentage === "number" ? point.gap_percentage : point.average_gap_percentage;
+  const gap = typeof point.gap_percentage === "number"
+    ? point.gap_percentage
+    : seriesLabel === "Experience median"
+      ? point.median_gap_percentage
+      : point.average_gap_percentage;
   const sampleSize = typeof point.sample_size === "number" ? point.sample_size : null;
   return (
     <div className="correlation-tooltip">
@@ -49,6 +54,7 @@ function CorrelationTooltip({ active, payload }: { active?: boolean; payload?: A
       {date ? <span>Date: {date}</span> : null}
       {daysFlown !== null ? <span>Days flown: {daysFlown}</span> : null}
       {typeof gap === "number" ? <span>Gap: {gap.toFixed(3)}%</span> : null}
+      {typeof point.is_model === "boolean" && point.is_model ? <span>Predicted gap</span> : null}
       {sampleSize !== null ? <span>Sample: {sampleSize}</span> : null}
     </div>
   );
@@ -112,6 +118,22 @@ function readCorrelationScale(value: string | null): CorrelationScale {
   return value === "full" ? "full" : "focus";
 }
 
+function parsePositiveInteger(value: string) {
+  if (!value.trim()) {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 1 ? parsed : null;
+}
+
+function parseNumber(value: string) {
+  if (!value.trim()) {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function percentile(values: number[], rank: number) {
   if (values.length === 0) {
     return 0;
@@ -142,7 +164,20 @@ function describeCorrelation(value: number | null) {
   return `${value < 0 ? "Strong negative" : "Strong positive"} relationship`;
 }
 
-function buildLinearTrend(points: ProgressCorrelationResponse["points"]) {
+function calculatePearson(points: ProgressCorrelationResponse["points"]) {
+  if (points.length < 2) {
+    return null;
+  }
+  const xMean = points.reduce((sum, point) => sum + point.days_flown, 0) / points.length;
+  const yMean = points.reduce((sum, point) => sum + point.gap_percentage, 0) / points.length;
+  const numerator = points.reduce((sum, point) => sum + (point.days_flown - xMean) * (point.gap_percentage - yMean), 0);
+  const xVariance = points.reduce((sum, point) => sum + (point.days_flown - xMean) ** 2, 0);
+  const yVariance = points.reduce((sum, point) => sum + (point.gap_percentage - yMean) ** 2, 0);
+  const denominator = Math.sqrt(xVariance * yVariance);
+  return denominator === 0 ? null : Number((numerator / denominator).toFixed(4));
+}
+
+function buildLinearTrend(points: ProgressCorrelationResponse["points"], seriesLabel: string) {
   if (points.length < 2) {
     return { line: [], slope: null, rSquared: null };
   }
@@ -164,8 +199,8 @@ function buildLinearTrend(points: ProgressCorrelationResponse["points"]) {
   const maxDays = Math.max(...xValues);
   return {
     line: [
-      { days_flown: minDays, gap_percentage: intercept + slope * minDays },
-      { days_flown: maxDays, gap_percentage: intercept + slope * maxDays },
+      { days_flown: minDays, gap_percentage: intercept + slope * minDays, series_label: seriesLabel, is_model: true },
+      { days_flown: maxDays, gap_percentage: intercept + slope * maxDays, series_label: seriesLabel, is_model: true },
     ],
     slope,
     rSquared,
@@ -182,9 +217,14 @@ export function GeneralStatsPage() {
   const [correlationFrom, setCorrelationFrom] = useState(searchParams.get("correlation_from") ?? DEFAULT_CORRELATION_FROM);
   const [showCorrelationPoints, setShowCorrelationPoints] = useState(true);
   const [showCorrelationAverage, setShowCorrelationAverage] = useState(true);
+  const [showCorrelationMedian, setShowCorrelationMedian] = useState(true);
   const [showCorrelationViewport, setShowCorrelationViewport] = useState(true);
   const [showCorrelationTrend, setShowCorrelationTrend] = useState(true);
+  const [showViewportCorrelationTrend, setShowViewportCorrelationTrend] = useState(true);
   const [correlationScale, setCorrelationScale] = useState<CorrelationScale>(readCorrelationScale(searchParams.get("correlation_scale")));
+  const [experienceTo, setExperienceTo] = useState(searchParams.get("experience_to") ?? "200");
+  const [correlationYMin, setCorrelationYMin] = useState(searchParams.get("correlation_y_min") ?? "");
+  const [correlationYMax, setCorrelationYMax] = useState(searchParams.get("correlation_y_max") ?? "");
   const [dayStreakView, setDayStreakView] = useState<DayStreakView>(searchParams.get("streak_view") === "days-flown" ? "days-flown" : "streaks");
   const [streakMode, setStreakMode] = useState<StreakMode>(readStreakMode(searchParams.get("streak_mode")));
   const [streakFilter, setStreakFilter] = useState<StreakFilter>(readStreakFilter(searchParams.get("streak_filter")));
@@ -214,9 +254,14 @@ export function GeneralStatsPage() {
       if (streakMode !== "best") params.set("streak_mode", streakMode);
       if (streakFilter !== "all") params.set("streak_filter", streakFilter);
     }
-    if (section === "progress-correlation" && correlationScale !== "focus") params.set("correlation_scale", correlationScale);
+    if (section === "progress-correlation") {
+      if (correlationScale !== "focus") params.set("correlation_scale", correlationScale);
+      if (experienceTo) params.set("experience_to", experienceTo);
+      if (correlationYMin) params.set("correlation_y_min", correlationYMin);
+      if (correlationYMax) params.set("correlation_y_max", correlationYMax);
+    }
     if (params.toString() !== searchParams.toString()) setSearchParams(params, { replace: true });
-  }, [consistentPilotsOnly, correlationFrom, correlationScale, dateFrom, dateTo, dayStreakView, pilotFromQuery, raceClass, searchParams, section, selectedPilot, setSearchParams, streakFilter, streakMode]);
+  }, [consistentPilotsOnly, correlationFrom, correlationScale, correlationYMax, correlationYMin, dateFrom, dateTo, dayStreakView, experienceTo, pilotFromQuery, raceClass, searchParams, section, selectedPilot, setSearchParams, streakFilter, streakMode]);
   const stats = useApi<GeneralStatsResponse>(
     () => fetchJson(buildGeneralStatsPath(raceClass, dateFrom, dateTo, selectedPilot, consistentPilotsOnly)),
     [raceClass, dateFrom, dateTo, selectedPilot, consistentPilotsOnly],
@@ -253,13 +298,46 @@ export function GeneralStatsPage() {
   }, [stats.data, streakFilter, streakMode]);
   const dayStreakStats = stats.data?.day_streaks;
   const correlationData = correlation.data;
-  const viewportCorrelationPoints = useMemo(
-    () => correlationData?.points.filter((point) => point.pilot === selectedPilot) ?? [],
-    [correlationData, selectedPilot],
+  const experienceLimit = parsePositiveInteger(experienceTo);
+  const visibleCorrelationPoints = useMemo(
+    () => {
+      const points = correlationData?.points ?? [];
+      return experienceLimit === null ? points : points.filter((point) => point.days_flown <= experienceLimit);
+    },
+    [correlationData, experienceLimit],
   );
-  const correlationTrend = useMemo(() => buildLinearTrend(correlationData?.points ?? []), [correlationData]);
+  const visibleCorrelationAverages = useMemo(
+    () => {
+      const averages = correlationData?.averages ?? [];
+      return experienceLimit === null ? averages : averages.filter((point) => point.days_flown <= experienceLimit);
+    },
+    [correlationData, experienceLimit],
+  );
+  const viewportCorrelationPoints = useMemo(
+    () => visibleCorrelationPoints.filter((point) => point.pilot === selectedPilot),
+    [selectedPilot, visibleCorrelationPoints],
+  );
+  const correlationPearson = useMemo(() => calculatePearson(visibleCorrelationPoints), [visibleCorrelationPoints]);
+  const correlationTrend = useMemo(() => buildLinearTrend(visibleCorrelationPoints, "Population linear model"), [visibleCorrelationPoints]);
+  const viewportCorrelationTrend = useMemo(() => buildLinearTrend(viewportCorrelationPoints, `${selectedPilot} linear model`), [selectedPilot, viewportCorrelationPoints]);
+  const averageCorrelationPoints = useMemo(
+    () => visibleCorrelationAverages.map((point) => ({ ...point, series_label: "Experience average" })),
+    [visibleCorrelationAverages],
+  );
+  const medianCorrelationPoints = useMemo(
+    () => visibleCorrelationAverages.map((point) => ({ ...point, series_label: "Experience median" })),
+    [visibleCorrelationAverages],
+  );
+  const manualCorrelationDomain = useMemo(() => {
+    const minimum = parseNumber(correlationYMin);
+    const maximum = parseNumber(correlationYMax);
+    return minimum !== null && maximum !== null && minimum < maximum ? [minimum, maximum] : null;
+  }, [correlationYMax, correlationYMin]);
   const correlationYAxisDomain = useMemo(() => {
-    const values = correlationData?.points.map((point) => point.gap_percentage) ?? [];
+    const values = visibleCorrelationPoints.map((point) => point.gap_percentage);
+    if (manualCorrelationDomain) {
+      return manualCorrelationDomain;
+    }
     if (values.length === 0) {
       return [-10, 50];
     }
@@ -273,13 +351,14 @@ export function GeneralStatsPage() {
     const upper = percentile(values, 0.95);
     const padding = Math.max((upper - lower) * 0.08, 5);
     return [Math.floor((lower - padding) / 10) * 10, Math.ceil((upper + padding) / 10) * 10];
-  }, [correlationData, correlationScale]);
+  }, [correlationScale, manualCorrelationDomain, visibleCorrelationPoints]);
   const correlationClippedCount = useMemo(() => {
-    if (correlationScale === "full" || !correlationData) {
+    if ((correlationScale === "full" && !manualCorrelationDomain) || !correlationData) {
       return 0;
     }
-    return correlationData.points.filter((point) => point.gap_percentage < correlationYAxisDomain[0] || point.gap_percentage > correlationYAxisDomain[1]).length;
-  }, [correlationData, correlationScale, correlationYAxisDomain]);
+    return visibleCorrelationPoints.filter((point) => point.gap_percentage < correlationYAxisDomain[0] || point.gap_percentage > correlationYAxisDomain[1]).length;
+  }, [correlationData, correlationScale, correlationYAxisDomain, manualCorrelationDomain, visibleCorrelationPoints]);
+  const correlationRangeLabel = manualCorrelationDomain ? "Manual Y range" : correlationScale === "full" ? "Full range" : "Readable focus";
 
   return (
     <div className="stack">
@@ -563,38 +642,50 @@ export function GeneralStatsPage() {
             <label className="field correlation-date-field"><span>Gap data from</span><input type="date" value={correlationFrom} onChange={(event) => setCorrelationFrom(event.target.value)} /></label>
           </div>
           <div className="stat-grid correlation-summary">
-            <div className="stat-card"><span>Pilots with valid gaps</span><strong>{correlationData.pilot_count}</strong></div>
-            <div className="stat-card"><span>Observations</span><strong>{correlationData.observation_count}</strong></div>
-            <div className="stat-card"><span>Pearson correlation</span><strong>{correlationData.pearson_correlation ?? "-"}</strong><small className="stat-card-note">{describeCorrelation(correlationData.pearson_correlation)}</small></div>
+            <div className="stat-card"><span>Pilots in visible range</span><strong>{new Set(visibleCorrelationPoints.map((point) => point.pilot)).size}</strong></div>
+            <div className="stat-card"><span>Observations in visible range</span><strong>{visibleCorrelationPoints.length}</strong></div>
+            <div className="stat-card"><span>Pearson correlation</span><strong>{correlationPearson ?? "-"}</strong><small className="stat-card-note">{describeCorrelation(correlationPearson)}</small></div>
             <div className="stat-card"><span>Completed through</span><strong>{correlationData.completed_through ?? "-"}</strong></div>
           </div>
           <div className="chart-actions correlation-controls">
+            <label className="field correlation-range-field"><span>Experience days to</span><input type="number" min="1" step="1" value={experienceTo} placeholder="All" onChange={(event) => setExperienceTo(event.target.value)} /></label>
+            <button type="button" className={experienceTo === "" ? "chip active" : "chip"} aria-pressed={experienceTo === ""} onClick={() => setExperienceTo("")}>All</button>
+            <span className="control-divider" />
             <label><input type="checkbox" checked={showCorrelationPoints} onChange={() => setShowCorrelationPoints((value) => !value)} /> All pilot observations</label>
             <label><input type="checkbox" checked={showCorrelationAverage} onChange={() => setShowCorrelationAverage((value) => !value)} /> Experience average</label>
+            <label><input type="checkbox" checked={showCorrelationMedian} onChange={() => setShowCorrelationMedian((value) => !value)} /> Experience median</label>
             <label><input type="checkbox" checked={showCorrelationViewport} onChange={() => setShowCorrelationViewport((value) => !value)} /> Viewport pilot: {selectedPilot}</label>
-            <label><input type="checkbox" checked={showCorrelationTrend} onChange={() => setShowCorrelationTrend((value) => !value)} /> Linear model</label>
+            <label><input type="checkbox" checked={showCorrelationTrend} onChange={() => setShowCorrelationTrend((value) => !value)} /> Population linear model</label>
+            <label><input type="checkbox" checked={showViewportCorrelationTrend} onChange={() => setShowViewportCorrelationTrend((value) => !value)} /> Viewport linear model</label>
             <span className="control-divider" />
             <span className="chart-control-label">Y scale</span>
-            {(["focus", "full"] as CorrelationScale[]).map((scale) => <button type="button" className={correlationScale === scale ? "chip active" : "chip"} aria-pressed={correlationScale === scale} onClick={() => setCorrelationScale(scale)} key={scale}>{scale === "focus" ? "Readable focus" : "Full range"}</button>)}
+            {(["focus", "full"] as CorrelationScale[]).map((scale) => <button type="button" className={correlationScale === scale && !correlationYMin && !correlationYMax ? "chip active" : "chip"} aria-pressed={correlationScale === scale && !correlationYMin && !correlationYMax} onClick={() => { setCorrelationScale(scale); setCorrelationYMin(""); setCorrelationYMax(""); }} key={scale}>{scale === "focus" ? "Readable focus" : "Full range"}</button>)}
+            <label className="field correlation-y-field"><span>Y min %</span><input type="number" step="1" value={correlationYMin} placeholder="Auto" onChange={(event) => setCorrelationYMin(event.target.value)} /></label>
+            <label className="field correlation-y-field"><span>Y max %</span><input type="number" step="1" value={correlationYMax} placeholder="Auto" onChange={(event) => setCorrelationYMax(event.target.value)} /></label>
           </div>
           <div className="progress-correlation-chart" role="img" aria-label={`Scatter chart of cumulative days flown against percentage gap to the daily top-three average for ${raceClass} class`}>
             <ResponsiveContainer width="100%" height={430}>
-              <ComposedChart data={correlationData.points} margin={{ top: 18, right: 24, left: 4, bottom: 18 }}>
+              <ComposedChart data={visibleCorrelationPoints} margin={{ top: 18, right: 24, left: 4, bottom: 18 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" />
                 <XAxis type="number" dataKey="days_flown" allowDecimals={false} name="Days flown" label={{ value: "Cumulative days flown", position: "insideBottom", offset: -8 }} />
                 <YAxis type="number" dataKey="gap_percentage" unit="%" domain={correlationYAxisDomain} allowDataOverflow name="Gap" label={{ value: "Gap to top-3 average (%)", angle: -90, position: "insideLeft" }} />
                 <Tooltip content={<CorrelationTooltip />} />
                 <Legend />
-                {showCorrelationPoints ? <Scatter name="All pilot days" data={correlationData.points} dataKey="gap_percentage" fill="var(--viz-series-1, #7aa7ff)" fillOpacity={0.35} /> : null}
-                {showCorrelationAverage ? <Line name="Average gap by experience" data={correlationData.averages} type="monotone" dataKey="average_gap_percentage" stroke="var(--accent-2)" strokeWidth={3} dot={false} connectNulls /> : null}
+                {showCorrelationPoints ? <Scatter name="All pilot days" data={visibleCorrelationPoints} dataKey="gap_percentage" fill="var(--viz-series-1, #7aa7ff)" fillOpacity={0.35} /> : null}
+                {showCorrelationAverage ? <Line name="Average gap by experience" data={averageCorrelationPoints} type="monotone" dataKey="average_gap_percentage" stroke="var(--accent-2)" strokeWidth={3} dot={false} connectNulls /> : null}
+                {showCorrelationMedian ? <Line name="Median gap by experience" data={medianCorrelationPoints} type="monotone" dataKey="median_gap_percentage" stroke="var(--accent-3)" strokeWidth={3} dot={false} connectNulls /> : null}
                 {showCorrelationViewport ? <Line name={`${selectedPilot} gap`} data={viewportCorrelationPoints} type="monotone" dataKey="gap_percentage" stroke="var(--accent)" strokeWidth={3} dot={{ r: 3 }} connectNulls /> : null}
-                {showCorrelationTrend ? <Line name="Linear model" data={correlationTrend.line} type="linear" dataKey="gap_percentage" stroke="var(--accent-3)" strokeWidth={2} strokeDasharray="7 5" dot={false} connectNulls /> : null}
+                {showCorrelationTrend ? <Line name="Population linear model" data={correlationTrend.line} type="linear" dataKey="gap_percentage" stroke="var(--accent-3)" strokeWidth={2} strokeDasharray="7 5" dot={{ r: 4 }} activeDot={{ r: 6 }} connectNulls /> : null}
+                {showViewportCorrelationTrend ? <Line name={`${selectedPilot} linear model`} data={viewportCorrelationTrend.line} type="linear" dataKey="gap_percentage" stroke="var(--accent)" strokeWidth={2} strokeDasharray="3 4" dot={{ r: 4 }} activeDot={{ r: 6 }} connectNulls /> : null}
               </ComposedChart>
             </ResponsiveContainer>
           </div>
           {viewportCorrelationPoints.length === 0 ? <p className="chart-note">The selected viewport pilot has no valid gap observations in this period.</p> : null}
-          {correlationClippedCount > 0 ? <p className="chart-note">Readable focus shows the central 90% of gaps; {correlationClippedCount} extreme observation{correlationClippedCount === 1 ? " is" : "s are"} outside the plotted range. Switch to Full range to inspect them.</p> : null}
-          {correlationTrend.slope !== null ? <p className="chart-note">Linear model: {correlationTrend.slope >= 0 ? "+" : ""}{correlationTrend.slope.toFixed(3)} percentage points per additional flown day, R² {(correlationTrend.rSquared ?? 0).toFixed(3)}.</p> : null}
+          {correlationClippedCount > 0 ? <p className="chart-note">{correlationRangeLabel} excludes {correlationClippedCount} observation{correlationClippedCount === 1 ? "" : "s"} outside the plotted range. Switch to Full range or widen the manual bounds to inspect them.</p> : null}
+          {correlationTrend.slope !== null || viewportCorrelationTrend.slope !== null ? <div className="correlation-model-summary">
+            {correlationTrend.slope !== null ? <span>Population linear model: {correlationTrend.slope >= 0 ? "+" : ""}{correlationTrend.slope.toFixed(3)} percentage points per additional flown day, R² {(correlationTrend.rSquared ?? 0).toFixed(3)}.</span> : null}
+            {viewportCorrelationTrend.slope !== null ? <span>{selectedPilot} linear model: {viewportCorrelationTrend.slope >= 0 ? "+" : ""}{viewportCorrelationTrend.slope.toFixed(3)} percentage points per additional flown day, R² {(viewportCorrelationTrend.rSquared ?? 0).toFixed(3)}.</span> : null}
+          </div> : null}
           <p className="chart-note">Cumulative days flown are counted from the pilot’s first stored result. Gap observations begin on {correlationData.gap_from} and use the daily top-three average as the leader benchmark. A negative correlation suggests the gap tends to shrink as experience grows; early-arriving elite pilots may appear as outliers.</p>
         </section>
       ) : null}

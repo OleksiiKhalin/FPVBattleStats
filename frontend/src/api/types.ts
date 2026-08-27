@@ -193,6 +193,7 @@ export type ProgressCorrelationPoint = {
 export type ProgressCorrelationAverage = {
   days_flown: number;
   average_gap_percentage: number;
+  median_gap_percentage: number;
   sample_size: number;
 };
 
