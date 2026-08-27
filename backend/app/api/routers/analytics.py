@@ -7,6 +7,7 @@ from ..dependencies import get_session
 from ...schemas.analytics import (
     GeneralStatsResponse,
     GlobalLeaderboardResponse,
+    ProgressCorrelationResponse,
     PilotComparisonResponse,
     PilotHoverCardResponse,
     PilotOption,
@@ -120,3 +121,18 @@ def get_general_stats(
         consistent_pilots_only=consistent_pilots_only,
     )
     return GeneralStatsResponse.model_validate(payload)
+
+
+@router.get("/progress-correlation/{race_class}", response_model=ProgressCorrelationResponse)
+def get_progress_correlation(
+    race_class: str,
+    gap_from: date = Query(default=date(2026, 3, 1)),
+    pilot_name: str | None = Query(default=None),
+    session: Session = Depends(get_session),
+) -> ProgressCorrelationResponse:
+    payload = AnalyticsService(session).get_progress_correlation(
+        race_class=race_class,
+        gap_from=gap_from,
+        viewport_pilot=pilot_name,
+    )
+    return ProgressCorrelationResponse.model_validate(payload)

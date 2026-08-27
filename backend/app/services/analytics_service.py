@@ -372,6 +372,90 @@ class AnalyticsService:
             "day_streaks": day_streak_stats,
         }
 
+    def get_progress_correlation(
+        self,
+        *,
+        race_class: str,
+        gap_from: date,
+        viewport_pilot: str | None,
+    ) -> dict:
+        history_rows = self._results_with_dates(race_class=race_class)
+        if not history_rows:
+            return {
+                "race_class": race_class,
+                "gap_from": gap_from,
+                "completed_through": None,
+                "viewport_pilot": viewport_pilot,
+                "points": [],
+                "averages": [],
+                "pilot_count": 0,
+                "observation_count": 0,
+                "pearson_correlation": None,
+            }
+
+        latest_stored_date = max(row["date"] for row in history_rows)
+        completed_through = min(latest_stored_date, date.today() - timedelta(days=1))
+        completed_rows = [row for row in history_rows if row["date"] <= completed_through]
+        dates_by_pilot: dict[str, set[date]] = defaultdict(set)
+        for row in completed_rows:
+            dates_by_pilot[row["pilot"]].add(row["date"])
+
+        experience_by_pilot_date: dict[str, dict[date, int]] = {}
+        for pilot, pilot_dates in dates_by_pilot.items():
+            experience_by_pilot_date[pilot] = {
+                race_date: index
+                for index, race_date in enumerate(sorted(pilot_dates), start=1)
+            }
+
+        rows_by_date: dict[date, list[dict]] = defaultdict(list)
+        for row in completed_rows:
+            rows_by_date[row["date"]].append(row)
+
+        points: list[dict] = []
+        for race_date, day_rows in sorted(rows_by_date.items()):
+            if race_date < gap_from:
+                continue
+            timed_rows = [row for row in day_rows if row["time"] is not None]
+            top_three_times = sorted(row["time"] for row in timed_rows)[:3]
+            top_three_average = sum(top_three_times) / len(top_three_times) if top_three_times else None
+            if top_three_average in (None, 0):
+                continue
+            for row in timed_rows:
+                points.append(
+                    {
+                        "pilot": row["pilot"],
+                        "country": row["country"],
+                        "date": race_date,
+                        "days_flown": experience_by_pilot_date[row["pilot"]][race_date],
+                        "gap_percentage": round(((row["time"] - top_three_average) / top_three_average) * 100, 3),
+                    },
+                )
+
+        average_values: dict[int, list[float]] = defaultdict(list)
+        for point in points:
+            average_values[point["days_flown"]].append(point["gap_percentage"])
+        averages = [
+            {
+                "days_flown": days_flown,
+                "average_gap_percentage": round(sum(values) / len(values), 3),
+                "sample_size": len(values),
+            }
+            for days_flown, values in sorted(average_values.items())
+        ]
+        x_values = [point["days_flown"] for point in points]
+        y_values = [point["gap_percentage"] for point in points]
+        return {
+            "race_class": race_class,
+            "gap_from": gap_from,
+            "completed_through": completed_through,
+            "viewport_pilot": viewport_pilot,
+            "points": points,
+            "averages": averages,
+            "pilot_count": len({point["pilot"] for point in points}),
+            "observation_count": len(points),
+            "pearson_correlation": self._pearson_correlation(x_values, y_values),
+        }
+
 
     def _build_easy_days_stats(
         self,
@@ -453,6 +537,7 @@ class AnalyticsService:
             select(
                 DaySpecModel.date,
                 ResultModel.place,
+                ResultModel.time,
                 PilotModel.pilot,
                 PilotModel.country,
             )
@@ -466,10 +551,25 @@ class AnalyticsService:
                 "date": race_date,
                 "place": place,
                 "pilot": pilot,
+                "time": time_value,
                 "country": country,
             }
-            for race_date, place, pilot, country in rows
+            for race_date, place, time_value, pilot, country in rows
         ]
+
+    @staticmethod
+    def _pearson_correlation(x_values: list[int], y_values: list[float]) -> float | None:
+        if len(x_values) < 2 or len(x_values) != len(y_values):
+            return None
+        x_mean = sum(x_values) / len(x_values)
+        y_mean = sum(y_values) / len(y_values)
+        numerator = sum((x_value - x_mean) * (y_value - y_mean) for x_value, y_value in zip(x_values, y_values, strict=False))
+        x_variance = sum((x_value - x_mean) ** 2 for x_value in x_values)
+        y_variance = sum((y_value - y_mean) ** 2 for y_value in y_values)
+        denominator = math.sqrt(x_variance * y_variance)
+        if math.isclose(denominator, 0.0):
+            return None
+        return round(numerator / denominator, 4)
 
     def _latest_season_day_ids(self, day_specs: list[DaySpecModel]) -> list[int]:
         latest_by_season: dict[str, DaySpecModel] = {}

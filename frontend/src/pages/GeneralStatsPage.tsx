@@ -1,4 +1,4 @@
-import { Bar, BarChart, Brush, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, Brush, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Scatter, Tooltip, XAxis, YAxis } from "recharts";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
@@ -7,6 +7,7 @@ import type {
   ConsistencyRow,
   CountryStatsRow,
   GeneralStatsResponse,
+  ProgressCorrelationResponse,
   QuadStatsRow,
   SeasonStatsRow,
   TrackRatingRow,
@@ -15,9 +16,10 @@ import { RangeQuickFilters } from "../components/RangeQuickFilters";
 import { usePilot } from "../context/PilotContext";
 import { useApi } from "../hooks/useApi";
 
-type GeneralSection = "countries" | "quads" | "tracks" | "seasons" | "participation" | "easy-days" | "consistency" | "day-streaks";
+type GeneralSection = "countries" | "quads" | "tracks" | "seasons" | "participation" | "easy-days" | "consistency" | "day-streaks" | "progress-correlation";
 type DayStreakView = "streaks" | "days-flown";
 type StreakMode = "best" | "best-active" | "all";
+type StreakFilter = "all" | "active" | "inactive";
 type SortDirection = "asc" | "desc";
 type CountrySortKey = keyof Pick<CountryStatsRow, "country" | "unique_pilots" | "avg_season_score" | "avg_place" | "season_wins" | "medals_per_pilot">;
 type QuadSortKey = keyof Pick<QuadStatsRow, "quad" | "category" | "entries" | "usage_percentage" | "unique_pilots" | "avg_place" | "wins">;
@@ -28,6 +30,28 @@ type ImprovementSortKey = keyof Pick<ConsistencyRow, "pilot" | "country" | "appe
 
 const DEFAULT_FROM = "2023-11-15";
 const DEFAULT_TO = new Date().toISOString().slice(0, 10);
+const DEFAULT_CORRELATION_FROM = "2026-03-01";
+
+function CorrelationTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload?: Record<string, unknown> }> }) {
+  if (!active || !payload?.length || !payload[0].payload) {
+    return null;
+  }
+  const point = payload[0].payload;
+  const pilot = typeof point.pilot === "string" ? point.pilot : "Population average";
+  const date = typeof point.date === "string" ? point.date : null;
+  const daysFlown = typeof point.days_flown === "number" ? point.days_flown : null;
+  const gap = typeof point.gap_percentage === "number" ? point.gap_percentage : point.average_gap_percentage;
+  const sampleSize = typeof point.sample_size === "number" ? point.sample_size : null;
+  return (
+    <div className="correlation-tooltip">
+      <strong>{pilot}</strong>
+      {date ? <span>Date: {date}</span> : null}
+      {daysFlown !== null ? <span>Days flown: {daysFlown}</span> : null}
+      {typeof gap === "number" ? <span>Gap: {gap.toFixed(3)}%</span> : null}
+      {sampleSize !== null ? <span>Sample: {sampleSize}</span> : null}
+    </div>
+  );
+}
 
 function buildGeneralStatsPath(raceClass: string, dateFrom: string, dateTo: string, pilotName: string, consistentPilotsOnly: boolean) {
   const params = new URLSearchParams({ pilot_name: pilotName });
@@ -79,6 +103,10 @@ function readStreakMode(value: string | null): StreakMode {
   return value === "best-active" || value === "all" ? value : "best";
 }
 
+function readStreakFilter(value: string | null): StreakFilter {
+  return value === "active" || value === "inactive" ? value : "all";
+}
+
 export function GeneralStatsPage() {
   const { selectedPilot } = usePilot();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -86,8 +114,13 @@ export function GeneralStatsPage() {
   const [dateFrom, setDateFrom] = useState(searchParams.get("from") ?? DEFAULT_FROM);
   const [dateTo, setDateTo] = useState(searchParams.get("to") ?? DEFAULT_TO);
   const [section, setSection] = useState<GeneralSection>((searchParams.get("section") as GeneralSection | null) ?? "countries");
+  const [correlationFrom, setCorrelationFrom] = useState(searchParams.get("correlation_from") ?? DEFAULT_CORRELATION_FROM);
+  const [showCorrelationPoints, setShowCorrelationPoints] = useState(true);
+  const [showCorrelationAverage, setShowCorrelationAverage] = useState(true);
+  const [showCorrelationViewport, setShowCorrelationViewport] = useState(true);
   const [dayStreakView, setDayStreakView] = useState<DayStreakView>(searchParams.get("streak_view") === "days-flown" ? "days-flown" : "streaks");
   const [streakMode, setStreakMode] = useState<StreakMode>(readStreakMode(searchParams.get("streak_mode")));
+  const [streakFilter, setStreakFilter] = useState<StreakFilter>(readStreakFilter(searchParams.get("streak_filter")));
   const [consistentPilotsOnly, setConsistentPilotsOnly] = useState(searchParams.get("consistent") === "true");
   const [seasonScope, setSeasonScope] = useState("");
   const [countrySort, setCountrySort] = useState<{ key: CountrySortKey; direction: SortDirection }>({ key: "unique_pilots", direction: "desc" });
@@ -108,15 +141,21 @@ export function GeneralStatsPage() {
     if (dateFrom) params.set("from", dateFrom);
     if (dateTo) params.set("to", dateTo);
     if (consistentPilotsOnly) params.set("consistent", "true");
+    if (correlationFrom) params.set("correlation_from", correlationFrom);
     if (section === "day-streaks") {
       if (dayStreakView !== "streaks") params.set("streak_view", dayStreakView);
       if (streakMode !== "best") params.set("streak_mode", streakMode);
+      if (streakFilter !== "all") params.set("streak_filter", streakFilter);
     }
     if (params.toString() !== searchParams.toString()) setSearchParams(params, { replace: true });
-  }, [consistentPilotsOnly, dateFrom, dateTo, dayStreakView, pilotFromQuery, raceClass, searchParams, section, selectedPilot, setSearchParams, streakMode]);
+  }, [consistentPilotsOnly, correlationFrom, dateFrom, dateTo, dayStreakView, pilotFromQuery, raceClass, searchParams, section, selectedPilot, setSearchParams, streakFilter, streakMode]);
   const stats = useApi<GeneralStatsResponse>(
     () => fetchJson(buildGeneralStatsPath(raceClass, dateFrom, dateTo, selectedPilot, consistentPilotsOnly)),
     [raceClass, dateFrom, dateTo, selectedPilot, consistentPilotsOnly],
+  );
+  const correlation = useApi<ProgressCorrelationResponse>(
+    () => fetchJson(`/analytics/progress-correlation/${raceClass}?${new URLSearchParams({ gap_from: correlationFrom, pilot_name: selectedPilot }).toString()}`),
+    [correlationFrom, raceClass, selectedPilot],
   );
 
   const sectionLabel = {
@@ -128,6 +167,7 @@ export function GeneralStatsPage() {
     "easy-days": "Easy Days",
     consistency: "Consistency",
     "day-streaks": "Day Streaks",
+    "progress-correlation": "Progress Correlation",
   };
 
   const countryRows = useMemo(() => (stats.data ? sortRows(stats.data.countries, countrySort.key, countrySort.direction) : []), [stats.data, countrySort]);
@@ -137,12 +177,18 @@ export function GeneralStatsPage() {
   const consistencyRows = useMemo(() => (stats.data ? sortRows(stats.data.consistency_leaderboard, consistencySort.key, consistencySort.direction) : []), [stats.data, consistencySort]);
   const improvementRows = useMemo(() => (stats.data ? sortRows(stats.data.best_improvement, improvementSort.key, improvementSort.direction) : []), [stats.data, improvementSort]);
   const visibleStreakRows = useMemo(() => {
-    const rows = stats.data?.day_streaks.streaks ?? [];
-    if (streakMode === "best") return rows.filter((row) => row.is_best);
-    if (streakMode === "best-active") return rows.filter((row) => row.is_best || row.is_active);
-    return rows;
-  }, [stats.data, streakMode]);
+    const allRows = stats.data?.day_streaks.streaks ?? [];
+    const modeRows = streakMode === "best" ? allRows.filter((row) => row.is_best) : streakMode === "best-active" ? allRows.filter((row) => row.is_best || row.is_active) : allRows;
+    if (streakFilter === "active") return modeRows.filter((row) => row.is_active);
+    if (streakFilter === "inactive") return modeRows.filter((row) => !row.is_active);
+    return modeRows;
+  }, [stats.data, streakFilter, streakMode]);
   const dayStreakStats = stats.data?.day_streaks;
+  const correlationData = correlation.data;
+  const viewportCorrelationPoints = useMemo(
+    () => correlationData?.points.filter((point) => point.pilot === selectedPilot) ?? [],
+    [correlationData, selectedPilot],
+  );
 
   return (
     <div className="stack">
@@ -154,7 +200,7 @@ export function GeneralStatsPage() {
           </div>
           <div className="meta">
             <span>Selected pilot consistency highlight: {selectedPilot}</span>
-            <span>Date period affects stats except the consistency section, which is all-time.</span>
+            <span>Date period affects stats except Consistency and Progress Correlation, which use their own all-time history rules.</span>
           </div>
         </div>
 
@@ -206,6 +252,8 @@ export function GeneralStatsPage() {
 
       {stats.loading ? <div className="panel">Loading general stats...</div> : null}
       {stats.error ? <div className="panel">General stats unavailable: {stats.error}</div> : null}
+      {section === "progress-correlation" && correlation.loading ? <div className="panel">Loading progress correlation...</div> : null}
+      {section === "progress-correlation" && correlation.error ? <div className="panel">Progress correlation unavailable: {correlation.error}</div> : null}
 
       {stats.data && section === "countries" ? (
         <section className="panel">
@@ -370,12 +418,18 @@ export function GeneralStatsPage() {
                   {mode === "best" ? "Best only" : mode === "best-active" ? "Best + active" : "All streaks"}
                 </button>
               ))}
+              <span className="control-divider" />
+              {(["all", "active", "inactive"] as StreakFilter[]).map((filter) => (
+                <button type="button" className={streakFilter === filter ? "chip active" : "chip"} onClick={() => setStreakFilter(filter)} key={filter}>
+                  {filter === "all" ? "All statuses" : filter[0].toUpperCase() + filter.slice(1)}
+                </button>
+              ))}
             </> : null}
           </div>
 
           {dayStreakView === "streaks" ? (
             <div className="streak-leaderboard">
-              {visibleStreakRows.length === 0 ? <p>No qualifying streaks match this mode.</p> : null}
+              {visibleStreakRows.length === 0 ? <p>No qualifying streaks match these filters.</p> : null}
               {visibleStreakRows.map((streak, index) => (
                 <article className={`streak-leaderboard-row ${streak.is_active ? "streak-active" : "streak-inactive"} ${streak.pilot === selectedPilot ? "selected-row" : ""}`} key={`${streak.pilot}-${streak.start_date}`}>
                   <div className="streak-leaderboard-header">
@@ -409,6 +463,41 @@ export function GeneralStatsPage() {
             </>
           )}
           <p className="chart-note">Streaks require at least three consecutive calendar days. Active means the selected pilot’s best streak reaches the latest completed stored day; inactive streaks are greyed out. Days flown counts one result per race day and excludes today.</p>
+        </section>
+      ) : null}
+      {correlationData && section === "progress-correlation" ? (
+        <section className="panel chart-panel progress-correlation-panel">
+          <div className="panel-header">
+            <div><p className="eyebrow">Progress correlation</p><h2>Experience days versus leader gap</h2></div>
+            <label className="field correlation-date-field"><span>Gap data from</span><input type="date" value={correlationFrom} onChange={(event) => setCorrelationFrom(event.target.value)} /></label>
+          </div>
+          <div className="stat-grid correlation-summary">
+            <div className="stat-card"><span>Pilots with valid gaps</span><strong>{correlationData.pilot_count}</strong></div>
+            <div className="stat-card"><span>Observations</span><strong>{correlationData.observation_count}</strong></div>
+            <div className="stat-card"><span>Pearson correlation</span><strong>{correlationData.pearson_correlation ?? "-"}</strong></div>
+            <div className="stat-card"><span>Completed through</span><strong>{correlationData.completed_through ?? "-"}</strong></div>
+          </div>
+          <div className="chart-actions correlation-controls">
+            <label><input type="checkbox" checked={showCorrelationPoints} onChange={() => setShowCorrelationPoints((value) => !value)} /> All pilot observations</label>
+            <label><input type="checkbox" checked={showCorrelationAverage} onChange={() => setShowCorrelationAverage((value) => !value)} /> Experience average</label>
+            <label><input type="checkbox" checked={showCorrelationViewport} onChange={() => setShowCorrelationViewport((value) => !value)} /> Viewport pilot: {selectedPilot}</label>
+          </div>
+          <div className="progress-correlation-chart" role="img" aria-label={`Scatter chart of cumulative days flown against percentage gap to the daily top-three average for ${raceClass} class`}>
+            <ResponsiveContainer width="100%" height={430}>
+              <ComposedChart data={correlationData.points} margin={{ top: 18, right: 24, left: 4, bottom: 18 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                <XAxis type="number" dataKey="days_flown" allowDecimals={false} name="Days flown" label={{ value: "Cumulative days flown", position: "insideBottom", offset: -8 }} />
+                <YAxis type="number" dataKey="gap_percentage" unit="%" name="Gap" label={{ value: "Gap to top-3 average (%)", angle: -90, position: "insideLeft" }} />
+                <Tooltip content={<CorrelationTooltip />} />
+                <Legend />
+                {showCorrelationPoints ? <Scatter name="All pilot days" data={correlationData.points} dataKey="gap_percentage" fill="#7aa7ff" fillOpacity={0.35} /> : null}
+                {showCorrelationAverage ? <Line name="Average gap by experience" data={correlationData.averages} type="monotone" dataKey="average_gap_percentage" stroke="#ff9d5c" strokeWidth={3} dot={false} connectNulls /> : null}
+                {showCorrelationViewport ? <Line name={`${selectedPilot} gap`} data={viewportCorrelationPoints} type="monotone" dataKey="gap_percentage" stroke="#7ef3c5" strokeWidth={3} dot={{ r: 3 }} connectNulls /> : null}
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+          {viewportCorrelationPoints.length === 0 ? <p className="chart-note">The selected viewport pilot has no valid gap observations in this period.</p> : null}
+          <p className="chart-note">Cumulative days flown are counted from the pilot’s first stored result. Gap observations begin on {correlationData.gap_from} and use the daily top-three average as the leader benchmark. A negative correlation suggests the gap tends to shrink as experience grows; early-arriving elite pilots may appear as outliers.</p>
         </section>
       ) : null}
       {stats.data && section === "consistency" ? (

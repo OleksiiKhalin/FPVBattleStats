@@ -229,6 +229,32 @@ class DayStreakStats(BaseModel):
     days_flown_summary: DaysFlownSummary
 
 
+class ProgressCorrelationPoint(BaseModel):
+    pilot: str
+    country: str | None = None
+    date: date
+    days_flown: int
+    gap_percentage: float
+
+
+class ProgressCorrelationAverage(BaseModel):
+    days_flown: int
+    average_gap_percentage: float
+    sample_size: int
+
+
+class ProgressCorrelationResponse(BaseModel):
+    race_class: str
+    gap_from: date
+    completed_through: date | None = None
+    viewport_pilot: str | None = None
+    points: list[ProgressCorrelationPoint]
+    averages: list[ProgressCorrelationAverage]
+    pilot_count: int
+    observation_count: int
+    pearson_correlation: float | None = None
+
+
 class GeneralStatsResponse(BaseModel):
     race_class: str
     date_from: date | None = None

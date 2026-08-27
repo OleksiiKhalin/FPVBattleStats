@@ -9,6 +9,7 @@ sys.path.append(str(Path(__file__).resolve().parents[2] / "shared" / "python"))
 from fpvbattle_core.db.models import DaySpecModel, PilotModel, ResultModel
 from fpvbattle_core.db.session import create_db_engine, create_session_factory, init_db
 
+from backend.app.schemas.analytics import ProgressCorrelationResponse
 from backend.app.services.analytics_service import AnalyticsService
 
 
@@ -181,6 +182,51 @@ def test_general_day_streaks_and_days_flown_are_all_time_and_class_specific() ->
     assert all_time_response["day_streaks"] == day_streaks
     whoop_response = service.get_general_stats(race_class="whoop", date_from=None, date_to=None, selected_pilot=None)
     assert [row["pilot"] for row in whoop_response["day_streaks"]["days_flown"]] == ["Whoop Pilot"]
+    session.close()
+
+
+def test_progress_correlation_uses_cumulative_experience_and_post_cutoff_gaps() -> None:
+    engine = create_db_engine("sqlite:///:memory:")
+    init_db(engine)
+    session = create_session_factory(engine)()
+
+    pre_gap_date = date(2026, 2, 28)
+    gap_start = date(2026, 3, 1)
+    for pilot_name, place in (("Novice", 1),):
+        _seed_result(session, race_date=pre_gap_date, race_class="open", pilot_name=pilot_name, place=place)
+    for pilot_name, place in (("Leader One", 1), ("Leader Two", 2), ("Leader Three", 3), ("Novice", 4)):
+        _seed_result(session, race_date=gap_start, race_class="open", pilot_name=pilot_name, place=place)
+    for pilot_name, place in (("Leader One", 1), ("Leader Two", 2), ("Leader Three", 3), ("Novice", 2)):
+        _seed_result(session, race_date=gap_start + timedelta(days=1), race_class="open", pilot_name=pilot_name, place=place)
+    _seed_result(session, race_date=date.today(), race_class="open", pilot_name="Today Only", place=5)
+    _seed_result(session, race_date=gap_start, race_class="whoop", pilot_name="Whoop Only", place=1)
+    session.commit()
+
+    response = AnalyticsService(session).get_progress_correlation(
+        race_class="open",
+        gap_from=gap_start,
+        viewport_pilot="Novice",
+    )
+    validated = ProgressCorrelationResponse.model_validate(response)
+    novice_points = [point for point in response["points"] if point["pilot"] == "Novice"]
+
+    assert validated.viewport_pilot == "Novice"
+    assert response["completed_through"] == date.today() - timedelta(days=1)
+    assert [point["days_flown"] for point in novice_points] == [2, 3]
+    assert all(point["date"] >= gap_start for point in response["points"])
+    assert all(point["pilot"] != "Today Only" for point in response["points"])
+    assert novice_points[0]["gap_percentage"] == 9.091
+    average_day_two = next(row for row in response["averages"] if row["days_flown"] == 2)
+    assert average_day_two == {"days_flown": 2, "average_gap_percentage": 3.426, "sample_size": 4}
+
+    later_response = AnalyticsService(session).get_progress_correlation(
+        race_class="open",
+        gap_from=gap_start + timedelta(days=1),
+        viewport_pilot="Novice",
+    )
+    later_novice_points = [point for point in later_response["points"] if point["pilot"] == "Novice"]
+    assert [point["days_flown"] for point in later_novice_points] == [3]
+    assert "Whoop Only" not in {point["pilot"] for point in response["points"]}
     session.close()
 
 

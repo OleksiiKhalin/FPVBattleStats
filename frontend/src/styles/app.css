@@ -711,6 +711,50 @@ h3 {
   margin: 16px 0;
 }
 
+.correlation-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 16px 0;
+}
+
+.correlation-date-field {
+  min-width: 190px;
+}
+
+.correlation-controls {
+  align-items: center;
+}
+
+.correlation-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.progress-correlation-chart {
+  width: 100%;
+  min-height: 430px;
+  margin-top: 8px;
+}
+
+.correlation-tooltip {
+  display: grid;
+  gap: 5px;
+  min-width: 170px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: #14181f;
+  background: rgba(244, 239, 230, 0.96);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+  font-size: 0.8rem;
+}
+
+.correlation-tooltip strong {
+  color: #14181f;
+}
+
 .streak-cells {
   display: flex;
   flex-wrap: wrap;

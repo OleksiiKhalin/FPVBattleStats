@@ -182,6 +182,32 @@ export type DayStreakStats = {
   days_flown_summary: DaysFlownSummary;
 };
 
+export type ProgressCorrelationPoint = {
+  pilot: string;
+  country: string | null;
+  date: string;
+  days_flown: number;
+  gap_percentage: number;
+};
+
+export type ProgressCorrelationAverage = {
+  days_flown: number;
+  average_gap_percentage: number;
+  sample_size: number;
+};
+
+export type ProgressCorrelationResponse = {
+  race_class: string;
+  gap_from: string;
+  completed_through: string | null;
+  viewport_pilot: string | null;
+  points: ProgressCorrelationPoint[];
+  averages: ProgressCorrelationAverage[];
+  pilot_count: number;
+  observation_count: number;
+  pearson_correlation: number | null;
+};
+
 export type GeneralStatsResponse = {
   race_class: string;
   date_from: string | null;
