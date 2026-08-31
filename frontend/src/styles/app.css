@@ -507,6 +507,36 @@ h3 {
   margin: 0;
 }
 
+.place-comparison-charts {
+  display: grid;
+  gap: 18px;
+}
+
+.place-chart-section {
+  padding: 14px 0 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.place-chart-section:first-child {
+  border-top: 0;
+}
+
+.place-chart-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.place-chart-heading h3 {
+  margin: 0;
+}
+
+.place-comparison-status {
+  margin: 0;
+  padding: 14px 0;
+}
+
 .chart-tooltip {
   display: grid;
   gap: 4px;
@@ -1309,6 +1339,15 @@ h3 {
 }
 
 .comparison-panel-with-open-menu .combo-menu {
+  z-index: 510;
+}
+
+.places-panel:has(.combo-menu) {
+  position: relative;
+  z-index: 500;
+}
+
+.places-panel:has(.combo-menu) .combo-menu {
   z-index: 510;
 }
 .hover-kpis {

@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Brush, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { fetchJson } from "../api/client";
-import type { PilotComparisonDay, PilotComparisonResponse, PilotOption } from "../api/types";
+import type { PilotComparisonDay, PilotComparisonResponse } from "../api/types";
+import { PilotComparisonPicker } from "./PilotComparisonPicker";
 import { useApi } from "../hooks/useApi";
 
 type Props = {
@@ -11,14 +12,11 @@ type Props = {
   raceClass: string;
   dateFrom: string;
   dateTo: string;
-  initialOpponent?: string;
-  onOpponentChange?: (pilot: string) => void;
+  opponentPilot: string;
+  onOpponentChange: (pilot: string) => void;
 };
 
 type ComparisonView = "calendar" | "gap-chart";
-
-const RECENT_PILOTS_KEY = "fpvbattle-recent-comparison-pilots";
-const DEFAULT_OPPONENT = "Jaxon";
 
 function buildComparisonPath(raceClass: string, primaryPilot: string, opponentPilot: string, dateFrom: string, dateTo: string) {
   const params = new URLSearchParams();
@@ -79,71 +77,17 @@ function PilotSummary({ name, stats }: { name: string; stats: PilotComparisonRes
   );
 }
 
-function readRecentPilots() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(RECENT_PILOTS_KEY) ?? "[]");
-    return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === "string") : [];
-  } catch {
-    return [];
-  }
-}
-
-export function PilotComparisonPanel({ primaryPilot, raceClass, dateFrom, dateTo, initialOpponent, onOpponentChange }: Props) {
-  const [opponentPilot, setOpponentPilot] = useState(initialOpponent ?? DEFAULT_OPPONENT);
-  const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
-  const [recentPilots, setRecentPilots] = useState<string[]>(readRecentPilots);
+export function PilotComparisonPanel({ primaryPilot, raceClass, dateFrom, dateTo, opponentPilot, onOpponentChange }: Props) {
   const [showCalendarGaps, setShowCalendarGaps] = useState(true);
   const [comparisonView, setComparisonView] = useState<ComparisonView>("calendar");
   const [showDailyGap, setShowDailyGap] = useState(true);
   const [showWeeklyAverage, setShowWeeklyAverage] = useState(false);
   const [showMonthlyAverage, setShowMonthlyAverage] = useState(false);
   const [excludeWorstResult, setExcludeWorstResult] = useState(false);
-  const rootRef = useRef<HTMLDivElement | null>(null);
-  const pilots = useApi<PilotOption[]>(() => fetchJson(`/analytics/pilots?race_class=${raceClass}`), [raceClass]);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
-    };
-    window.addEventListener("mousedown", handleClickOutside);
-    return () => window.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  useEffect(() => {
-    const firstPilot = pilots.data?.find((pilot) => pilot.pilot !== primaryPilot)?.pilot ?? "";
-    setOpponentPilot((current) => current && current !== primaryPilot && pilots.data?.some((pilot) => pilot.pilot === current) ? current : firstPilot);
-  }, [pilots.data, primaryPilot, raceClass]);
-
-  useEffect(() => {
-    setQuery(opponentPilot);
-  }, [opponentPilot]);
-
-  useEffect(() => {
-    if (opponentPilot) onOpponentChange?.(opponentPilot);
-  }, [onOpponentChange, opponentPilot]);
-
-  const options = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    return (pilots.data ?? [])
-      .filter((pilot) => pilot.pilot !== primaryPilot)
-      .filter((pilot) => !normalized || pilot.pilot.toLowerCase().includes(normalized) || (pilot.country ?? "").toLowerCase().includes(normalized))
-      .slice(0, 24);
-  }, [pilots.data, primaryPilot, query]);
-
-  const selectOpponent = (pilot: string) => {
-    setOpponentPilot(pilot);
-    setQuery(pilot);
-    setOpen(false);
-    const nextRecent = [pilot, ...recentPilots.filter((value) => value !== pilot && value !== primaryPilot)].slice(0, 5);
-    setRecentPilots(nextRecent);
-    localStorage.setItem(RECENT_PILOTS_KEY, JSON.stringify(nextRecent));
-    sessionStorage.setItem("fpvbattle-comparison-opponent", pilot);
-  };
-
   const comparison = useApi<PilotComparisonResponse>(
     () => fetchJson(buildComparisonPath(raceClass, primaryPilot, opponentPilot, dateFrom, dateTo)),
     [raceClass, primaryPilot, opponentPilot, dateFrom, dateTo],
+    Boolean(opponentPilot),
   );
 
   const months = useMemo(() => {
@@ -192,23 +136,12 @@ export function PilotComparisonPanel({ primaryPilot, raceClass, dateFrom, dateTo
 
   return (
     <div className="stack">
-      <section className={open ? "panel comparison-panel-with-open-menu" : "panel"}>
+      <section className="panel">
         <div className="panel-header">
           <div><p className="eyebrow">Head-to-head</p><h2>Compare {primaryPilot} against another pilot</h2></div>
           <div className="meta"><span>Statistics use the selected class and date scope.</span></div>
         </div>
-        <div className="comparison-controls">
-          <div className="comparison-picker" ref={rootRef}>
-            <label className="field"><span>Compare with</span>
-              <div className="combo-box">
-                <input value={query} onFocus={() => setOpen(true)} onChange={(event) => { setQuery(event.target.value); setOpen(true); }} onKeyDown={(event) => { if (event.key === "Enter" && options[0]) { event.preventDefault(); selectOpponent(options[0].pilot); } }} placeholder="Search pilot name" autoComplete="off" />
-                <button type="button" className="combo-toggle" onClick={() => setOpen((value) => !value)}>v</button>
-                {open ? <div className="combo-menu">{options.length === 0 ? <div className="combo-empty">No pilots found</div> : options.map((pilot) => <button key={pilot.pilot} type="button" className={pilot.pilot === opponentPilot ? "combo-option active" : "combo-option"} onClick={() => selectOpponent(pilot.pilot)}><span>{pilot.pilot}</span><small>{pilot.country ?? "Unknown"}</small></button>)}</div> : null}
-              </div>
-            </label>
-          </div>
-          {recentPilots.filter((pilot) => pilot !== primaryPilot).length ? <div className="quick-filters recent-pilots"><span>Recent pilots</span>{recentPilots.filter((pilot) => pilot !== primaryPilot).map((pilot) => <button className={pilot === opponentPilot ? "chip active" : "chip"} type="button" key={pilot} onClick={() => selectOpponent(pilot)}>{pilot}</button>)}</div> : null}
-        </div>
+        <PilotComparisonPicker primaryPilot={primaryPilot} raceClass={raceClass} value={opponentPilot} onChange={onOpponentChange} />
       </section>
 
       {comparison.loading ? <div className="panel">Loading comparison...</div> : null}

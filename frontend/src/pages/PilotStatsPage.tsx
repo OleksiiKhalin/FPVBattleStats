@@ -351,8 +351,8 @@ export function PilotStatsPage() {
       ) : null}
 
       {stats.data && section === "streaks" ? <StreakBoard streaks={stats.data.streaks} /> : null}
-      {stats.data && section === "places" ? <PilotPlacesPanel seasons={stats.data.place_seasons} raceClass={raceClass} pilotName={selectedPilot} /> : null}
-      {section === "compare" ? <PilotComparisonPanel primaryPilot={selectedPilot} raceClass={raceClass} dateFrom={dateFrom} dateTo={dateTo} initialOpponent={comparisonOpponent || undefined} onOpponentChange={setComparisonOpponent} /> : null}
+      {stats.data && section === "places" ? <PilotPlacesPanel seasons={stats.data.place_seasons} raceClass={raceClass} pilotName={selectedPilot} opponentPilot={comparisonOpponent} onOpponentChange={setComparisonOpponent} /> : null}
+      {section === "compare" ? <PilotComparisonPanel primaryPilot={selectedPilot} raceClass={raceClass} dateFrom={dateFrom} dateTo={dateTo} opponentPilot={comparisonOpponent} onOpponentChange={setComparisonOpponent} /> : null}
     </div>
   );
 }

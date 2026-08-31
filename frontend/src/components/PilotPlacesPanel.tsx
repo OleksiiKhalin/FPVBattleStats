@@ -1,17 +1,23 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
-import type { PilotSeasonPlaceSummary } from "../api/types";
+import { fetchJson } from "../api/client";
+import type { PilotSeasonPlaceSummary, PilotStatsResponse } from "../api/types";
+import { useApi } from "../hooks/useApi";
+import { PilotComparisonPicker } from "./PilotComparisonPicker";
 
 type Props = {
   seasons: PilotSeasonPlaceSummary[];
   raceClass: string;
   pilotName: string;
+  opponentPilot: string;
+  onOpponentChange: (pilot: string) => void;
 };
 
 type ChartPoint = PilotSeasonPlaceSummary["places"][number] & { bar_height: number };
 
+const MAX_BAR_HEIGHT = 100;
 const leagueLabels: Record<string, string> = {
   gold: "Gold",
   silver: "Silver",
@@ -52,29 +58,116 @@ function buildTickPlaces(minPlace: number, maxPlace: number) {
   return [...places].sort((left, right) => left - right);
 }
 
-export function PilotPlacesPanel({ seasons, raceClass, pilotName }: Props) {
+function buildPilotStatsPath(raceClass: string, pilotName: string) {
+  return `/analytics/pilot-stats/${raceClass}/${encodeURIComponent(pilotName)}?streak_threshold=3`;
+}
+
+function placeColor(place: number) {
+  if (place === 1) return "#ffe072";
+  if (place === 2) return "#c8d0dc";
+  if (place === 3) return "#cf8a5a";
+  return "#7ef3c5";
+}
+
+type PlaceChartProps = {
+  pilotName: string;
+  raceClass: string;
+  points: PilotSeasonPlaceSummary["places"];
+  minPlace: number;
+  maxPlace: number;
+};
+
+function PlaceChart({ pilotName, raceClass, points, minPlace, maxPlace }: PlaceChartProps) {
   const navigate = useNavigate();
-  const [selectedSeason, setSelectedSeason] = useState<string | null>(null);
-  const selected = seasons.find((season) => season.season === selectedSeason) ?? null;
-  const selectedPlaces = selected?.places.map((point) => point.place) ?? [];
-  const minPlace = selectedPlaces.length ? Math.min(...selectedPlaces) : 1;
-  const maxPlace = selected ? Math.max(...selected.places.map((point) => point.place), minPlace) : 1;
   const placeRange = maxPlace - minPlace + 1;
-  const maxBarHeight = Math.log(placeRange + 1);
-  const chartData = useMemo<ChartPoint[]>(() => {
-    if (!selected) return [];
-    return selected.places.map((point) => ({
-      ...point,
-      bar_height: maxBarHeight - Math.log(point.place - minPlace + 1),
-    }));
-  }, [maxBarHeight, minPlace, selected]);
+  const logRange = Math.log(placeRange + 1);
+  const chartData = useMemo<ChartPoint[]>(() => points.map((point) => ({
+    ...point,
+    bar_height: MAX_BAR_HEIGHT * (logRange - Math.log(point.place - minPlace + 1)) / logRange,
+  })), [logRange, minPlace, points]);
   const tickPlaces = buildTickPlaces(minPlace, maxPlace);
-  const tickValues = tickPlaces.map((place) => maxBarHeight - Math.log(place - minPlace + 1));
+  const tickValues = tickPlaces.map((place) => MAX_BAR_HEIGHT * (logRange - Math.log(place - minPlace + 1)) / logRange);
 
   const openLeaderboard = (point: ChartPoint) => {
     const params = new URLSearchParams({ date: point.date, pilot: pilotName });
     navigate(`/${raceClass}?${params.toString()}`);
   };
+
+  return (
+    <section className="place-chart-section" aria-label={`${pilotName} places chart`}>
+      <div className="place-chart-heading">
+        <div>
+          <p className="eyebrow">Daily places</p>
+          <h3>{pilotName}</h3>
+        </div>
+        <span className="chart-hint">Best observed place: {minPlace}; fixed maximum bar height: {MAX_BAR_HEIGHT}</span>
+      </div>
+      {chartData.length === 0 ? (
+        <p className="empty-state">{pilotName} has no ranked daily places in this season.</p>
+      ) : (
+        <ResponsiveContainer width="100%" height={360}>
+          <BarChart data={chartData} margin={{ top: 20, right: 12, left: 4, bottom: 12 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+            <XAxis dataKey="date" />
+            <YAxis
+              domain={[0, MAX_BAR_HEIGHT]}
+              ticks={tickValues}
+              allowDecimals={false}
+              tickFormatter={(value) => String(Math.round(Math.exp(logRange * (1 - Number(value) / MAX_BAR_HEIGHT)) + minPlace - 1))}
+              label={{ value: "Place (1 = best)", angle: -90, position: "insideLeft" }}
+            />
+            <Tooltip
+              content={({ active, payload }) => {
+                if (!active || !payload?.length) return null;
+                const point = payload[0].payload as ChartPoint;
+                return (
+                  <div className="chart-tooltip">
+                    <strong>{point.date}</strong>
+                    <span>{pilotName}</span>
+                    <span>Place: {point.place}</span>
+                  </div>
+                );
+              }}
+            />
+            <Bar
+              dataKey="bar_height"
+              name={`${pilotName} place performance`}
+              radius={[4, 4, 0, 0]}
+              cursor="pointer"
+              onClick={(data) => {
+                const point = (data as { payload?: ChartPoint }).payload;
+                if (point) openLeaderboard(point);
+              }}
+            >
+              <LabelList dataKey="place" position="top" fill="#f4efe6" />
+              {chartData.map((point) => <Cell key={`${point.date}-${point.place}`} fill={placeColor(point.place)} />)}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      )}
+    </section>
+  );
+}
+
+export function PilotPlacesPanel({ seasons, raceClass, pilotName, opponentPilot, onOpponentChange }: Props) {
+  const [selectedSeason, setSelectedSeason] = useState<string | null>(null);
+  const selected = seasons.find((season) => season.season === selectedSeason) ?? null;
+  const opponentStats = useApi<PilotStatsResponse>(
+    () => fetchJson(buildPilotStatsPath(raceClass, opponentPilot)),
+    [raceClass, opponentPilot],
+    Boolean(selected && opponentPilot),
+  );
+  const opponentSeason = opponentStats.data?.place_seasons.find((season) => season.season === selectedSeason) ?? null;
+  const allSelectedPlaces = useMemo(
+    () => [...(selected?.places ?? []), ...(opponentSeason?.places ?? [])].map((point) => point.place),
+    [opponentSeason, selected],
+  );
+  const minPlace = allSelectedPlaces.length ? Math.min(...allSelectedPlaces) : 1;
+  const maxPlace = allSelectedPlaces.length ? Math.max(...allSelectedPlaces) : 1;
+
+  useEffect(() => {
+    if (selectedSeason && !seasons.some((season) => season.season === selectedSeason)) setSelectedSeason(null);
+  }, [seasons, selectedSeason]);
 
   return (
     <section className="panel places-panel">
@@ -85,6 +178,8 @@ export function PilotPlacesPanel({ seasons, raceClass, pilotName }: Props) {
         </div>
         <span className="chart-hint">Average place uses ranked daily results. League is calculated before each Open season.</span>
       </div>
+
+      <PilotComparisonPicker primaryPilot={pilotName} raceClass={raceClass} value={opponentPilot} onChange={onOpponentChange} />
 
       {seasons.length === 0 ? <p className="empty-state">This pilot has no recorded seasons in this class.</p> : null}
       <div className="place-season-grid">
@@ -120,52 +215,14 @@ export function PilotPlacesPanel({ seasons, raceClass, pilotName }: Props) {
               <p className="eyebrow">Selected season</p>
               <h3>{monthLabel(selected.season)} places</h3>
             </div>
-            <span className="chart-hint">Bars are normalized to this season's observed place range; labels and tooltips show the original integer place.</span>
+            <span className="chart-hint">Both charts share the observed place range. Labels and tooltips show the original integer place.</span>
           </div>
-          {chartData.length === 0 ? (
-            <p className="empty-state">No ranked daily places were recorded for this season.</p>
-          ) : (
-            <ResponsiveContainer width="100%" height={360}>
-              <BarChart data={chartData} margin={{ top: 12, right: 12, left: 4, bottom: 12 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-                <XAxis dataKey="date" />
-                <YAxis
-                  domain={[0, "auto"]}
-                  ticks={tickValues}
-                  allowDecimals={false}
-                  tickFormatter={(value) => String(Math.round(Math.exp(maxBarHeight - Number(value)) + minPlace - 1))}
-                  label={{ value: "Place (1 = best)", angle: -90, position: "insideLeft" }}
-                />
-                <Tooltip
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null;
-                    const point = payload[0].payload as ChartPoint;
-                    return (
-                      <div className="chart-tooltip">
-                        <strong>{point.date}</strong>
-                        <span>Place: {point.place}</span>
-                      </div>
-                    );
-                  }}
-                />
-                <Bar
-                  dataKey="bar_height"
-                  name="Place performance"
-                  radius={[4, 4, 0, 0]}
-                  cursor="pointer"
-                  onClick={(data) => openLeaderboard((data as { payload: ChartPoint }).payload)}
-                >
-                  <LabelList dataKey="place" position="top" fill="#f4efe6" />
-                  {chartData.map((point) => (
-                    <Cell
-                      key={`${point.date}-${point.place}`}
-                      fill={point.place === 1 ? "#ffe072" : point.place === 2 ? "#c8d0dc" : point.place === 3 ? "#cf8a5a" : "#7ef3c5"}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
+          <div className="place-comparison-charts">
+            <PlaceChart pilotName={pilotName} raceClass={raceClass} points={selected.places} minPlace={minPlace} maxPlace={maxPlace} />
+            {opponentStats.loading ? <p className="empty-state place-comparison-status">Loading {opponentPilot} places...</p> : null}
+            {opponentStats.error ? <p className="empty-state place-comparison-status">Comparison places unavailable: {opponentStats.error}</p> : null}
+            {!opponentStats.loading && !opponentStats.error && opponentPilot ? <PlaceChart pilotName={opponentPilot} raceClass={raceClass} points={opponentSeason?.places ?? []} minPlace={minPlace} maxPlace={maxPlace} /> : null}
+          </div>
         </div>
       ) : null}
     </section>
