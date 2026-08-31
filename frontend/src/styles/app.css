@@ -428,6 +428,92 @@ h3 {
   min-height: 380px;
 }
 
+.place-season-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.place-season-card {
+  display: grid;
+  gap: 10px;
+  min-height: 112px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: var(--text);
+  background: var(--panel-soft);
+  text-align: left;
+  cursor: pointer;
+}
+
+.place-season-card:hover,
+.place-season-card:focus-visible,
+.place-season-card.active {
+  border-color: rgba(126, 243, 197, 0.62);
+  background: var(--active);
+}
+
+.place-season-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.place-season-card-header,
+.place-season-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.place-season-card-meta {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.place-season-card-meta strong {
+  color: var(--text);
+  font-size: 1.1rem;
+}
+
+.place-season-card-status {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.season-medal {
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.place-chart-wrap {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.place-chart-wrap h3 {
+  margin: 0;
+}
+
+.chart-tooltip {
+  display: grid;
+  gap: 4px;
+  padding: 9px 11px;
+  border: 1px solid rgba(12, 17, 24, 0.18);
+  border-radius: 10px;
+  color: #14181f;
+  background: rgba(244, 239, 230, 0.96);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+  font-size: 0.82rem;
+}
+
+.empty-state {
+  color: var(--muted);
+}
+
 .stat-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -888,6 +974,18 @@ h3 {
   .stat-grid,
   .global-leaderboard-kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .place-season-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .place-season-grid {
+    grid-template-columns: 1fr;
   }
 }
 

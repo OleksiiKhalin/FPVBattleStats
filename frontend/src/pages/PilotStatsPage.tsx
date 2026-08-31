@@ -6,12 +6,13 @@ import { fetchJson } from "../api/client";
 import type { GeneralStatsResponse, GlobalLeaderboardResponse, PilotStatsResponse, PilotTimelinePoint } from "../api/types";
 import { GlobalLeaderboardPanel } from "../components/GlobalLeaderboardPanel";
 import { PilotComparisonPanel } from "../components/PilotComparisonPanel";
+import { PilotPlacesPanel } from "../components/PilotPlacesPanel";
 import { RangeQuickFilters } from "../components/RangeQuickFilters";
 import { StreakBoard } from "../components/StreakBoard";
 import { usePilot } from "../context/PilotContext";
 import { useApi } from "../hooks/useApi";
 
-type PilotSection = "global-leaderboard" | "leader-gap" | "logarithmic" | "time-comparison" | "streaks" | "compare";
+type PilotSection = "global-leaderboard" | "leader-gap" | "logarithmic" | "time-comparison" | "streaks" | "places" | "compare";
 
 const DEFAULT_FROM = "2023-11-15";
 const DEFAULT_TO = new Date().toISOString().slice(0, 10);
@@ -132,6 +133,7 @@ export function PilotStatsPage() {
     logarithmic: "Logarithmic View",
     "time-comparison": "Time Comparison",
     streaks: "Day Streaks",
+    places: "Places",
     compare: "Compare",
   };
 
@@ -349,6 +351,7 @@ export function PilotStatsPage() {
       ) : null}
 
       {stats.data && section === "streaks" ? <StreakBoard streaks={stats.data.streaks} /> : null}
+      {stats.data && section === "places" ? <PilotPlacesPanel seasons={stats.data.place_seasons} /> : null}
       {section === "compare" ? <PilotComparisonPanel primaryPilot={selectedPilot} raceClass={raceClass} dateFrom={dateFrom} dateTo={dateTo} initialOpponent={comparisonOpponent || undefined} onOpponentChange={setComparisonOpponent} /> : null}
     </div>
   );

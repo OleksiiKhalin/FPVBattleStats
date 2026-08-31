@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session
 
 from fpvbattle_core.db.models import DaySpecModel, PilotModel, ResultModel, SeasonLeaderboardModel
 
+from backend.app.services.global_leaderboard_service import GlobalLeaderboardService
+
 
 class AnalyticsService:
     def __init__(self, session: Session) -> None:
@@ -71,6 +73,7 @@ class AnalyticsService:
         streak_threshold: int,
     ) -> dict:
         threshold = max(streak_threshold, 3)
+        place_seasons = self._build_pilot_place_seasons(pilot_name=pilot_name, race_class=race_class)
         day_specs = self._get_day_specs(race_class=race_class, date_from=date_from, date_to=date_to)
         if not day_specs:
             return {
@@ -80,6 +83,7 @@ class AnalyticsService:
                 "date_to": date_to,
                 "timeline": [],
                 "active_timeline": [],
+                "place_seasons": place_seasons,
                 "streaks": {
                     "threshold": threshold,
                     "streaks": [],
@@ -106,6 +110,7 @@ class AnalyticsService:
             "date_to": date_to,
             "timeline": timeline,
             "active_timeline": [point for point in timeline if point["participated"]],
+            "place_seasons": place_seasons,
             "streaks": self._calculate_streaks(active_dates, threshold=threshold),
         }
 
@@ -558,6 +563,70 @@ class AnalyticsService:
             }
             for race_date, place, time_value, pilot, country in rows
         ]
+
+    def _build_pilot_place_seasons(self, *, pilot_name: str, race_class: str) -> list[dict]:
+        day_specs = self._get_day_specs(race_class=race_class, date_from=None, date_to=None)
+        if not day_specs:
+            return []
+
+        results_by_day = self._results_by_day([day_spec.id for day_spec in day_specs])
+        days_by_season: dict[str, list[DaySpecModel]] = defaultdict(list)
+        latest_day_by_season: dict[str, DaySpecModel] = {}
+        for day_spec in day_specs:
+            days_by_season[day_spec.season].append(day_spec)
+            latest_day_by_season[day_spec.season] = day_spec
+
+        season_rows_by_day = self._season_rows_by_day([day_spec.id for day_spec in latest_day_by_season.values()])
+        latest_data_date = max(day_spec.date for day_spec in day_specs)
+        leaderboard_service = GlobalLeaderboardService(self.session)
+        summaries: list[dict] = []
+
+        for season, season_days in sorted(days_by_season.items(), reverse=True):
+            places: list[dict] = []
+            for day_spec in season_days:
+                pilot_row = next(
+                    (row for row in results_by_day.get(day_spec.id, []) if row["pilot"] == pilot_name),
+                    None,
+                )
+                if pilot_row is None or pilot_row["place"] is None:
+                    continue
+                places.append({"date": day_spec.date, "place": int(pilot_row["place"])})
+
+            if not any(
+                row["pilot"] == pilot_name
+                for day_spec in season_days
+                for row in results_by_day.get(day_spec.id, [])
+            ):
+                continue
+
+            season_start = season_days[0].date.replace(day=1)
+            league_reference_date = season_start - timedelta(days=1)
+            next_month_start = (
+                date(season_start.year + 1, 1, 1)
+                if season_start.month == 12
+                else date(season_start.year, season_start.month + 1, 1)
+            )
+            season_end = next_month_start - timedelta(days=1)
+            season_place_row = next(
+                (row for row in season_rows_by_day.get(latest_day_by_season[season].id, []) if row["pilot"] == pilot_name),
+                None,
+            )
+            summaries.append(
+                {
+                    "season": season,
+                    "average_place": round(sum(row["place"] for row in places) / len(places), 2) if places else None,
+                    "places": places,
+                    "season_place": season_place_row["place"] if season_place_row else None,
+                    "is_complete": season_end <= latest_data_date,
+                    "league": leaderboard_service.get_pilot_league_as_of(
+                        race_class=race_class,
+                        pilot_name=pilot_name,
+                        as_of_date=league_reference_date,
+                    ),
+                    "league_reference_date": league_reference_date,
+                },
+            )
+        return summaries
 
     @staticmethod
     def _pearson_correlation(x_values: list[int], y_values: list[float]) -> float | None:

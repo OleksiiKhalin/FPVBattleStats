@@ -22,6 +22,21 @@ class PilotTimelinePoint(BaseModel):
     participant_count: int
 
 
+class PilotPlacePoint(BaseModel):
+    date: date
+    place: int
+
+
+class PilotSeasonPlaceSummary(BaseModel):
+    season: str
+    average_place: float | None = None
+    places: list[PilotPlacePoint]
+    season_place: int | None = None
+    is_complete: bool
+    league: str | None = None
+    league_reference_date: date
+
+
 class PilotStreakGroup(BaseModel):
     start_date: date
     end_date: date
@@ -43,6 +58,7 @@ class PilotStatsResponse(BaseModel):
     date_to: date | None = None
     timeline: list[PilotTimelinePoint]
     active_timeline: list[PilotTimelinePoint]
+    place_seasons: list[PilotSeasonPlaceSummary]
     streaks: PilotStreakSummary
 
 

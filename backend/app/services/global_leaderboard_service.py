@@ -135,6 +135,12 @@ class GlobalLeaderboardService:
             "rows": rows,
         }
 
+    def get_pilot_league_as_of(self, *, race_class: str, pilot_name: str, as_of_date: date) -> str | None:
+        """Return the calculated league for a pilot at an exact historical date."""
+        state = self._calculate_state(race_class=race_class, as_of_date=as_of_date)
+        pilot_row = next((row for row in state["rows"] if row["pilot"] == pilot_name), None)
+        return pilot_row["league"] if pilot_row is not None else None
+
     def create_snapshot(
         self,
         *,

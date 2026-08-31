@@ -36,6 +36,21 @@ export type PilotTimelinePoint = {
   participant_count: number;
 };
 
+export type PilotPlacePoint = {
+  date: string;
+  place: number;
+};
+
+export type PilotSeasonPlaceSummary = {
+  season: string;
+  average_place: number | null;
+  places: PilotPlacePoint[];
+  season_place: number | null;
+  is_complete: boolean;
+  league: string | null;
+  league_reference_date: string;
+};
+
 export type PilotStatsResponse = {
   pilot: string;
   race_class: string;
@@ -43,6 +58,7 @@ export type PilotStatsResponse = {
   date_to: string | null;
   timeline: PilotTimelinePoint[];
   active_timeline: PilotTimelinePoint[];
+  place_seasons: PilotSeasonPlaceSummary[];
   streaks: {
     threshold: number;
     lonely_single_days: number;

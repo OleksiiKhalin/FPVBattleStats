@@ -6,10 +6,10 @@ from sqlalchemy import select
 
 sys.path.append(str(Path(__file__).resolve().parents[2] / "shared" / "python"))
 
-from fpvbattle_core.db.models import DaySpecModel, PilotModel, ResultModel
+from fpvbattle_core.db.models import DaySpecModel, PilotModel, ResultModel, SeasonLeaderboardModel
 from fpvbattle_core.db.session import create_db_engine, create_session_factory, init_db
 
-from backend.app.schemas.analytics import ProgressCorrelationResponse
+from backend.app.schemas.analytics import PilotStatsResponse, ProgressCorrelationResponse
 from backend.app.services.analytics_service import AnalyticsService
 
 
@@ -19,7 +19,7 @@ def _seed_result(
     race_date: date,
     race_class: str,
     pilot_name: str,
-    place: int,
+    place: int | None,
     country: str = "US",
 ) -> None:
     day_spec = session.execute(
@@ -45,11 +45,89 @@ def _seed_result(
             category=None,
             pilot_ref=pilot.id,
             quad="Quad",
-            time=20.0 + place,
-            points=100 - place,
+            time=20.0 + (place or 5),
+            points=100 - (place or 5),
             place=place,
         ),
     )
+
+
+def _seed_season_row(session, *, race_date: date, pilot_name: str, place: int | None) -> None:
+    day_spec = session.execute(
+        select(DaySpecModel).where(DaySpecModel.date == race_date, DaySpecModel.race_class == "open"),
+    ).scalar_one()
+    pilot = session.execute(select(PilotModel).where(PilotModel.pilot == pilot_name)).scalar_one()
+    session.add(
+        SeasonLeaderboardModel(
+            day_spec_ref=day_spec.id,
+            category="gold" if place == 1 else "silver",
+            pilot_ref=pilot.id,
+            points=100 - (place or 5),
+            place=place,
+        ),
+    )
+
+
+def test_pilot_places_include_all_seasons_and_historical_league() -> None:
+    engine = create_db_engine("sqlite:///:memory:")
+    init_db(engine)
+    session = create_session_factory(engine)()
+
+    for offset in range(15):
+        race_date = date(2026, 2, 14) + timedelta(days=offset)
+        _seed_result(session, race_date=race_date, race_class="open", pilot_name="Leader", place=1)
+        _seed_result(session, race_date=race_date, race_class="open", pilot_name="Season Pilot", place=2)
+        _seed_result(session, race_date=race_date, race_class="open", pilot_name="Other", place=3)
+
+    for race_date, place in ((date(2026, 1, 10), 1), (date(2026, 1, 11), 3)):
+        _seed_result(session, race_date=race_date, race_class="open", pilot_name="Season Pilot", place=place)
+    for race_date, place in ((date(2026, 3, 1), 2), (date(2026, 3, 2), 4)):
+        _seed_result(session, race_date=race_date, race_class="open", pilot_name="Season Pilot", place=place)
+    for race_date, place in ((date(2026, 8, 1), 1), (date(2026, 8, 2), None)):
+        _seed_result(session, race_date=race_date, race_class="open", pilot_name="Season Pilot", place=place)
+    _seed_result(session, race_date=date(2026, 4, 1), race_class="open", pilot_name="Other", place=1)
+
+    _seed_season_row(session, race_date=date(2026, 1, 11), pilot_name="Season Pilot", place=1)
+    _seed_season_row(session, race_date=date(2026, 3, 2), pilot_name="Season Pilot", place=2)
+    _seed_season_row(session, race_date=date(2026, 8, 2), pilot_name="Season Pilot", place=3)
+    session.commit()
+
+    payload = AnalyticsService(session).get_pilot_stats(
+        pilot_name="Season Pilot",
+        race_class="open",
+        date_from=date(2026, 8, 1),
+        date_to=date(2026, 8, 2),
+        streak_threshold=3,
+    )
+    PilotStatsResponse.model_validate(payload)
+    seasons = {row["season"]: row for row in payload["place_seasons"]}
+
+    assert set(seasons) == {"2026-01", "2026-02", "2026-03", "2026-08"}
+    assert seasons["2026-01"]["average_place"] == 2.0
+    assert seasons["2026-01"]["places"] == [
+        {"date": date(2026, 1, 10), "place": 1},
+        {"date": date(2026, 1, 11), "place": 3},
+    ]
+    assert seasons["2026-01"]["season_place"] == 1
+    assert seasons["2026-01"]["is_complete"] is True
+    assert seasons["2026-01"]["league"] is None
+    assert seasons["2026-01"]["league_reference_date"] == date(2025, 12, 31)
+
+    assert seasons["2026-02"]["average_place"] == 2.0
+    assert seasons["2026-02"]["season_place"] is None
+    assert seasons["2026-02"]["is_complete"] is True
+
+    assert seasons["2026-03"]["average_place"] == 3.0
+    assert seasons["2026-03"]["season_place"] == 2
+    assert seasons["2026-03"]["league"] == "gold"
+    assert seasons["2026-03"]["league_reference_date"] == date(2026, 2, 28)
+
+    assert seasons["2026-08"]["average_place"] == 1.0
+    assert seasons["2026-08"]["places"] == [{"date": date(2026, 8, 1), "place": 1}]
+    assert seasons["2026-08"]["season_place"] == 3
+    assert seasons["2026-08"]["is_complete"] is False
+
+    session.close()
 
 
 def test_consistency_ignores_date_filters_and_uses_full_history() -> None:
