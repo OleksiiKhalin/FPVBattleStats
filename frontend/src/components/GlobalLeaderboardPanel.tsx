@@ -115,6 +115,7 @@ export function GlobalLeaderboardPanel({
   );
   const focus = data.selected_pilot ?? data.rows.find((row) => row.pilot === selectedPilot) ?? null;
   const forecast = focus ? focus[forecastMode === "weekly" ? "forecast_weekly" : "forecast_monthly"] : null;
+  const hasLeagues = data.race_class !== "whoop";
   const today = new Date().toISOString().slice(0, 10);
   const changeReferenceMax = [today, data.as_of_date, data.latest_data_date ?? today].sort()[0];
   const displayedChangeReferenceDate = changeReferenceDate || data.change_reference_date || "";
@@ -158,8 +159,8 @@ export function GlobalLeaderboardPanel({
           <>
             <div className="stat-grid global-leaderboard-kpis">
               <div className="stat-card"><span>Season start rank</span><strong>{rankLabel(focus.season_start_rank)}</strong></div>
-              <div className="stat-card"><span>Current rank</span><strong>{leagueLabel(focus.league)} {rankLabel(focus.rank)}</strong></div>
-              <div className="stat-card"><span>Projected next month</span><strong>{leagueLabel(focus.projected_next_season_league)} {rankLabel(focus.projected_next_season_rank)}</strong></div>
+              <div className="stat-card"><span>Current rank</span><strong>{hasLeagues ? `${leagueLabel(focus.league)} ` : ""}{rankLabel(focus.rank)}</strong></div>
+              <div className="stat-card"><span>Projected next month</span><strong>{hasLeagues ? `${leagueLabel(focus.projected_next_season_league)} ` : ""}{rankLabel(focus.projected_next_season_rank)}</strong></div>
               <div className="stat-card"><span>Flight-days / 30</span><strong>{focus.flight_days} / {data.window_days}</strong></div>
               <div className="stat-card"><span>Gap to top 3 (%)</span><strong>{percentLabel(focus.adjusted_average_gap_percentage)}</strong></div>
               <div className="stat-card"><span>Need / remain</span><strong>{focus.days_needed_for_next_season} / {focus.available_days_before_next_season}</strong></div>
@@ -232,7 +233,7 @@ export function GlobalLeaderboardPanel({
               {data.view_mode === "probable" ? "Show current leaderboard" : "Show probable next month"}
             </button>
             <label>Status <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="all">All</option><option value="qualified">Qualified</option><option value="at_risk">At risk</option><option value="candidate">Candidate</option><option value="guaranteed_out">Guaranteed out</option></select></label>
-            <label>League <select value={leagueFilter} onChange={(event) => setLeagueFilter(event.target.value)}><option value="all">All</option><option value="gold">Gold</option><option value="silver">Silver</option><option value="bronze">Bronze</option><option value="unranked">Unranked</option></select></label>
+            {hasLeagues ? <label>League <select value={leagueFilter} onChange={(event) => setLeagueFilter(event.target.value)}><option value="all">All</option><option value="gold">Gold</option><option value="silver">Silver</option><option value="bronze">Bronze</option><option value="unranked">Unranked</option></select></label> : null}
           </div>
         </div>
         <div className="table-scroll">
@@ -242,8 +243,8 @@ export function GlobalLeaderboardPanel({
               <th>{sortButton("rank", "Current")}</th>
               <th>{sortButton("projected_next_season_rank", "Projected")}</th>
               <th>{sortButton("pilot", "Pilot")}</th>
-              <th>{sortButton("current_league", "Current league")}</th>
-              <th>{sortButton("projected_next_season_league", "Projected league")}</th>
+              {hasLeagues ? <th>{sortButton("current_league", "Current league")}</th> : null}
+              {hasLeagues ? <th>{sortButton("projected_next_season_league", "Projected league")}</th> : null}
               <th>{sortButton("flight_days", "Days")}</th>
               <th>{sortButton("days_needed_for_next_season", "Need / remain")}</th>
               <th>{sortButton("inactive_days", "Inactive")}</th>
@@ -258,8 +259,8 @@ export function GlobalLeaderboardPanel({
                 <td>{rankLabel(row.rank)}</td>
                 <td>{rankLabel(row.projected_next_season_rank)}</td>
                 <td><strong>{row.pilot}</strong>{row.country ? <small className="table-muted"> {row.country}</small> : null}<small className="table-muted">First flight: {row.first_flight_date ?? "-"}</small></td>
-                <td><span className={leagueClass(row.current_league)}>{leagueLabel(row.current_league)}</span></td>
-                <td><span className={leagueClass(row.projected_next_season_league)}>{leagueLabel(row.projected_next_season_league)}</span></td>
+                {hasLeagues ? <td><span className={leagueClass(row.current_league)}>{leagueLabel(row.current_league)}</span></td> : null}
+                {hasLeagues ? <td><span className={leagueClass(row.projected_next_season_league)}>{leagueLabel(row.projected_next_season_league)}</span></td> : null}
                 <td>{row.flight_days}/{data.window_days}<small className="table-muted">{row.scored_days} scored</small></td>
                 <td>{row.days_needed_for_next_season} / {row.available_days_before_next_season}<small className="table-muted">{row.can_pass_next_season ? "can pass" : "not enough days"}</small></td>
                 <td>{row.inactive_days}<small className="table-muted">days since last flight</small><small className="table-muted">missed last 7d: {row.missed_last_7_days}</small><small className="table-muted">missed last 15d: {row.missed_last_15_days}</small></td>

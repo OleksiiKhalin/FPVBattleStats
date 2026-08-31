@@ -611,6 +611,15 @@ class AnalyticsService:
                 (row for row in season_rows_by_day.get(latest_day_by_season[season].id, []) if row["pilot"] == pilot_name),
                 None,
             )
+            league = (
+                None
+                if race_class == "whoop"
+                else leaderboard_service.get_pilot_league_as_of(
+                    race_class=race_class,
+                    pilot_name=pilot_name,
+                    as_of_date=league_reference_date,
+                )
+            )
             summaries.append(
                 {
                     "season": season,
@@ -618,11 +627,7 @@ class AnalyticsService:
                     "places": places,
                     "season_place": season_place_row["place"] if season_place_row else None,
                     "is_complete": season_end <= latest_data_date,
-                    "league": leaderboard_service.get_pilot_league_as_of(
-                        race_class=race_class,
-                        pilot_name=pilot_name,
-                        as_of_date=league_reference_date,
-                    ),
+                    "league": league,
                     "league_reference_date": league_reference_date,
                 },
             )

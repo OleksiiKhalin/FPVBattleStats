@@ -85,6 +85,7 @@ def test_pilot_places_include_all_seasons_and_historical_league() -> None:
         _seed_result(session, race_date=race_date, race_class="open", pilot_name="Season Pilot", place=place)
     for race_date, place in ((date(2026, 8, 1), 1), (date(2026, 8, 2), None)):
         _seed_result(session, race_date=race_date, race_class="open", pilot_name="Season Pilot", place=place)
+    _seed_result(session, race_date=date(2026, 8, 1), race_class="whoop", pilot_name="Season Pilot", place=1)
     _seed_result(session, race_date=date(2026, 4, 1), race_class="open", pilot_name="Other", place=1)
 
     _seed_season_row(session, race_date=date(2026, 1, 11), pilot_name="Season Pilot", place=1)
@@ -126,6 +127,15 @@ def test_pilot_places_include_all_seasons_and_historical_league() -> None:
     assert seasons["2026-08"]["places"] == [{"date": date(2026, 8, 1), "place": 1}]
     assert seasons["2026-08"]["season_place"] == 3
     assert seasons["2026-08"]["is_complete"] is False
+
+    whoop_payload = AnalyticsService(session).get_pilot_stats(
+        pilot_name="Season Pilot",
+        race_class="whoop",
+        date_from=None,
+        date_to=None,
+        streak_threshold=3,
+    )
+    assert whoop_payload["place_seasons"][0]["league"] is None
 
     session.close()
 

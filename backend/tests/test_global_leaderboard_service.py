@@ -169,6 +169,29 @@ def test_season_start_rank_uses_first_available_snapshot_in_current_month() -> N
     session.close()
 
 
+def test_whoop_global_leaderboard_does_not_expose_leagues() -> None:
+    session = _build_session()
+    start = date(2026, 8, 1)
+    for offset in range(15):
+        _add_day(session, start + timedelta(days=offset), "whoop", [("Whoop Pilot", 20.0)])
+    session.commit()
+
+    payload = GlobalLeaderboardService(session).get_global_leaderboard(
+        race_class="whoop",
+        as_of_date=date(2026, 8, 15),
+        selected_pilot="Whoop Pilot",
+    )
+    row = payload["selected_pilot"]
+
+    assert row is not None
+    assert row["league"] is None
+    assert row["display_league"] is None
+    assert row["current_league"] == "unranked"
+    assert row["projected_next_season_league"] is None
+    GlobalLeaderboardResponse.model_validate(payload)
+    session.close()
+
+
 def test_season_start_rank_is_computed_when_no_official_snapshot_exists() -> None:
     session = _build_session()
     for offset in range(-29, 20):

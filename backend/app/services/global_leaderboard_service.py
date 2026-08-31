@@ -101,6 +101,24 @@ class GlobalLeaderboardService:
             else:
                 decorated["display_rank"] = row["rank"]
                 decorated["display_league"] = row["league"] or "unranked"
+            if race_class == "whoop":
+                decorated["league"] = None
+                decorated["display_league"] = None
+                decorated["current_league"] = "unranked"
+                decorated["season_start_league"] = None
+                decorated["projected_next_season_league"] = None
+                decorated["league_delta"] = None
+                decorated["target_league"] = None
+                decorated["forecast_weekly"] = {
+                    **decorated["forecast_weekly"],
+                    "no_flight_league": None,
+                    "continue_league": None,
+                }
+                decorated["forecast_monthly"] = {
+                    **decorated["forecast_monthly"],
+                    "no_flight_league": None,
+                    "continue_league": None,
+                }
             rows.append(decorated)
 
         rows.sort(
@@ -137,6 +155,8 @@ class GlobalLeaderboardService:
 
     def get_pilot_league_as_of(self, *, race_class: str, pilot_name: str, as_of_date: date) -> str | None:
         """Return the calculated league for a pilot at an exact historical date."""
+        if race_class == "whoop":
+            return None
         state = self._calculate_state(race_class=race_class, as_of_date=as_of_date)
         pilot_row = next((row for row in state["rows"] if row["pilot"] == pilot_name), None)
         return pilot_row["league"] if pilot_row is not None else None

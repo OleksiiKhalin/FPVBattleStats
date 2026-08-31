@@ -1,10 +1,13 @@
 import { useMemo, useState } from "react";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useNavigate } from "react-router-dom";
+import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import type { PilotSeasonPlaceSummary } from "../api/types";
 
 type Props = {
   seasons: PilotSeasonPlaceSummary[];
+  raceClass: string;
+  pilotName: string;
 };
 
 type ChartPoint = PilotSeasonPlaceSummary["places"][number] & { bar_height: number };
@@ -40,28 +43,38 @@ function medalFor(season: PilotSeasonPlaceSummary) {
   return null;
 }
 
-function buildTickPlaces(maxPlace: number) {
-  if (maxPlace <= 12) return Array.from({ length: maxPlace }, (_, index) => index + 1);
-  const step = Math.ceil(maxPlace / 10);
-  const places = new Set([1, maxPlace]);
-  for (let place = 1 + step; place < maxPlace; place += step) places.add(place);
+function buildTickPlaces(minPlace: number, maxPlace: number) {
+  const range = maxPlace - minPlace + 1;
+  if (range <= 12) return Array.from({ length: range }, (_, index) => minPlace + index);
+  const step = Math.ceil(range / 10);
+  const places = new Set([minPlace, maxPlace]);
+  for (let place = minPlace + step; place < maxPlace; place += step) places.add(place);
   return [...places].sort((left, right) => left - right);
 }
 
-export function PilotPlacesPanel({ seasons }: Props) {
+export function PilotPlacesPanel({ seasons, raceClass, pilotName }: Props) {
+  const navigate = useNavigate();
   const [selectedSeason, setSelectedSeason] = useState<string | null>(null);
   const selected = seasons.find((season) => season.season === selectedSeason) ?? null;
-  const maxPlace = selected ? Math.max(...selected.places.map((point) => point.place), 1) : 1;
-  const maxBarHeight = Math.log(maxPlace + 1) - Math.log(1);
+  const selectedPlaces = selected?.places.map((point) => point.place) ?? [];
+  const minPlace = selectedPlaces.length ? Math.min(...selectedPlaces) : 1;
+  const maxPlace = selected ? Math.max(...selected.places.map((point) => point.place), minPlace) : 1;
+  const placeRange = maxPlace - minPlace + 1;
+  const maxBarHeight = Math.log(placeRange + 1);
   const chartData = useMemo<ChartPoint[]>(() => {
     if (!selected) return [];
     return selected.places.map((point) => ({
       ...point,
-      bar_height: maxBarHeight - Math.log(point.place),
+      bar_height: maxBarHeight - Math.log(point.place - minPlace + 1),
     }));
-  }, [maxBarHeight, selected]);
-  const tickPlaces = buildTickPlaces(maxPlace);
-  const tickValues = tickPlaces.map((place) => maxBarHeight - Math.log(place));
+  }, [maxBarHeight, minPlace, selected]);
+  const tickPlaces = buildTickPlaces(minPlace, maxPlace);
+  const tickValues = tickPlaces.map((place) => maxBarHeight - Math.log(place - minPlace + 1));
+
+  const openLeaderboard = (point: ChartPoint) => {
+    const params = new URLSearchParams({ date: point.date, pilot: pilotName });
+    navigate(`/${raceClass}?${params.toString()}`);
+  };
 
   return (
     <section className="panel places-panel">
@@ -70,7 +83,7 @@ export function PilotPlacesPanel({ seasons }: Props) {
           <p className="eyebrow">Places</p>
           <h2>Season results</h2>
         </div>
-        <span className="chart-hint">Average place uses ranked daily results. League is calculated before each season.</span>
+        <span className="chart-hint">Average place uses ranked daily results. League is calculated before each Open season.</span>
       </div>
 
       {seasons.length === 0 ? <p className="empty-state">This pilot has no recorded seasons in this class.</p> : null}
@@ -92,7 +105,7 @@ export function PilotPlacesPanel({ seasons }: Props) {
               </span>
               <span className="place-season-card-meta">
                 <span>Average place <strong>{formatPlace(season.average_place)}</strong></span>
-                <span className={leagueClass(season.league)}>{leagueLabel(season.league)}</span>
+                {raceClass === "open" ? <span className={leagueClass(season.league)}>{leagueLabel(season.league)}</span> : <span className="no-league">No league</span>}
               </span>
               <span className="place-season-card-status">{season.is_complete ? "Completed season" : "Season in progress"}</span>
             </button>
@@ -107,7 +120,7 @@ export function PilotPlacesPanel({ seasons }: Props) {
               <p className="eyebrow">Selected season</p>
               <h3>{monthLabel(selected.season)} places</h3>
             </div>
-            <span className="chart-hint">Higher bars represent better places; the tooltip shows the integer place.</span>
+            <span className="chart-hint">Bars are normalized to this season's observed place range; labels and tooltips show the original integer place.</span>
           </div>
           {chartData.length === 0 ? (
             <p className="empty-state">No ranked daily places were recorded for this season.</p>
@@ -120,7 +133,7 @@ export function PilotPlacesPanel({ seasons }: Props) {
                   domain={[0, "auto"]}
                   ticks={tickValues}
                   allowDecimals={false}
-                  tickFormatter={(value) => String(Math.round((maxPlace + 1) / Math.exp(Number(value))))}
+                  tickFormatter={(value) => String(Math.round(Math.exp(maxBarHeight - Number(value)) + minPlace - 1))}
                   label={{ value: "Place (1 = best)", angle: -90, position: "insideLeft" }}
                 />
                 <Tooltip
@@ -135,7 +148,21 @@ export function PilotPlacesPanel({ seasons }: Props) {
                     );
                   }}
                 />
-                <Bar dataKey="bar_height" fill="#7ef3c5" name="Place performance" radius={[4, 4, 0, 0]} />
+                <Bar
+                  dataKey="bar_height"
+                  name="Place performance"
+                  radius={[4, 4, 0, 0]}
+                  cursor="pointer"
+                  onClick={(data) => openLeaderboard((data as { payload: ChartPoint }).payload)}
+                >
+                  <LabelList dataKey="place" position="top" fill="#f4efe6" />
+                  {chartData.map((point) => (
+                    <Cell
+                      key={`${point.date}-${point.place}`}
+                      fill={point.place === 1 ? "#ffe072" : point.place === 2 ? "#c8d0dc" : point.place === 3 ? "#cf8a5a" : "#7ef3c5"}
+                    />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           )}

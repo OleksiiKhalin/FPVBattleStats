@@ -478,6 +478,15 @@ h3 {
   font-size: 1.1rem;
 }
 
+.no-league {
+  padding: 3px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
 .place-season-card-status {
   color: var(--muted);
   font-size: 0.76rem;
