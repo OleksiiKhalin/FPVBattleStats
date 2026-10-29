@@ -6,6 +6,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from fpvbattle_core.db.base import Base
+from fpvbattle_core.db.pilot_identity import merge_pilot_aliases
 
 
 def _normalize_database_url(database_url: str) -> str:
@@ -26,6 +27,9 @@ def init_db(engine: Engine) -> None:
     if engine.url.drivername.startswith("sqlite") and engine.url.database:
         Path(engine.url.database).parent.mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(bind=engine)
+    with Session(engine) as session:
+        merge_pilot_aliases(session)
+        session.commit()
 
 
 def create_session_factory(engine: Engine) -> sessionmaker[Session]:

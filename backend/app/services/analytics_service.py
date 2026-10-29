@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from fpvbattle_core.db.models import DaySpecModel, PilotModel, ResultModel, SeasonLeaderboardModel
+from fpvbattle_core.domain.pilots import canonicalize_pilot_name
 
 from backend.app.services.global_leaderboard_service import GlobalLeaderboardService
 
@@ -72,6 +73,7 @@ class AnalyticsService:
         date_to: date | None,
         streak_threshold: int,
     ) -> dict:
+        pilot_name = canonicalize_pilot_name(pilot_name)
         threshold = max(streak_threshold, 3)
         place_seasons = self._build_pilot_place_seasons(pilot_name=pilot_name, race_class=race_class)
         day_specs = self._get_day_specs(race_class=race_class, date_from=date_from, date_to=date_to)
@@ -125,6 +127,8 @@ class AnalyticsService:
         date_to: date | None,
         season: str | None,
     ) -> dict:
+        primary_pilot = canonicalize_pilot_name(primary_pilot)
+        opponent_pilot = canonicalize_pilot_name(opponent_pilot)
         all_seasons = list(
             self.session.execute(
                 select(DaySpecModel.season)
@@ -263,6 +267,8 @@ class AnalyticsService:
         target_date: date,
         viewpoint_pilot: str | None = None,
     ) -> dict:
+        pilot_name = canonicalize_pilot_name(pilot_name)
+        viewpoint_pilot = canonicalize_pilot_name(viewpoint_pilot) if viewpoint_pilot else None
         target_day = self.session.execute(
             select(DaySpecModel).where(DaySpecModel.race_class == race_class, DaySpecModel.date == target_date),
         ).scalar_one_or_none()
@@ -345,6 +351,7 @@ class AnalyticsService:
         selected_pilot: str | None,
         consistent_pilots_only: bool = False,
     ) -> dict:
+        selected_pilot = canonicalize_pilot_name(selected_pilot) if selected_pilot else None
         day_specs = self._get_day_specs(race_class=race_class, date_from=date_from, date_to=date_to)
         day_spec_ids = [day_spec.id for day_spec in day_specs]
         results_by_day = self._results_by_day(day_spec_ids)
@@ -385,6 +392,7 @@ class AnalyticsService:
         gap_from: date,
         viewport_pilot: str | None,
     ) -> dict:
+        viewport_pilot = canonicalize_pilot_name(viewport_pilot) if viewport_pilot else None
         history_rows = self._results_with_dates(race_class=race_class)
         if not history_rows:
             return {

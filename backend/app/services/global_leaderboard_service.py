@@ -14,6 +14,7 @@ from fpvbattle_core.db.models import (
     PilotModel,
     ResultModel,
 )
+from fpvbattle_core.domain.pilots import canonicalize_pilot_name
 
 
 class GlobalLeaderboardService:
@@ -32,6 +33,7 @@ class GlobalLeaderboardService:
         view_mode: str = "current",
         change_reference_date: date | None = None,
     ) -> dict:
+        selected_pilot = canonicalize_pilot_name(selected_pilot) if selected_pilot else None
         if view_mode not in {"current", "probable"}:
             raise ValueError("view_mode must be current or probable")
         as_of = as_of_date or self._latest_date(race_class=race_class) or date.today()
@@ -155,6 +157,7 @@ class GlobalLeaderboardService:
 
     def get_pilot_league_as_of(self, *, race_class: str, pilot_name: str, as_of_date: date) -> str | None:
         """Return the calculated league for a pilot at an exact historical date."""
+        pilot_name = canonicalize_pilot_name(pilot_name)
         if race_class == "whoop":
             return None
         state = self._calculate_state(race_class=race_class, as_of_date=as_of_date)
@@ -250,7 +253,7 @@ class GlobalLeaderboardService:
         ).all()
         all_flight_dates: dict[str, set[date]] = defaultdict(set)
         for race_date, pilot in all_timed_rows:
-            all_flight_dates[pilot].add(race_date)
+            all_flight_dates[canonicalize_pilot_name(pilot)].add(race_date)
 
         season_start = date(as_of_date.year, as_of_date.month, 1)
         season_race_days = set(
@@ -265,7 +268,7 @@ class GlobalLeaderboardService:
 
         day_rows: dict[date, list[tuple[int, str, str | None, float]]] = defaultdict(list)
         for race_date, time_value, pilot_ref, pilot, country in raw_rows:
-            day_rows[race_date].append((pilot_ref, pilot, country, float(time_value)))
+            day_rows[race_date].append((pilot_ref, canonicalize_pilot_name(pilot), country, float(time_value)))
 
         pilot_data: dict[str, dict] = {}
         for race_date, rows in day_rows.items():
